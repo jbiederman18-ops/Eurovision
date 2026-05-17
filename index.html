@@ -21,15 +21,13 @@
   .voter-cell{border-radius:8px;padding:4px 7px;transition:all 0.2s;border:1px solid rgba(255,255,255,0.05)}
   .star-btn{background:none;border:none;font-size:14px;padding:1px;line-height:1;cursor:pointer;transition:all 0.1s}
   .lb-row{display:flex;align-items:center;gap:10px;border-radius:10px;padding:8px 12px;margin-bottom:4px}
-  .modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:16px}
-  .modal-box{background:#12121e;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:24px;max-width:460px;width:100%}
-  .modal-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:9px 12px;font-size:13px;outline:none;box-sizing:border-box}
-  .connect-btn{width:100%;padding:11px;background:rgba(77,150,255,0.2);border:1px solid rgba(77,150,255,0.5);border-radius:9px;color:#4D96FF;font-weight:800;font-size:14px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;transition:all 0.2s}
   .section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px}
+  .toast{position:fixed;bottom:24px;right:24px;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.5px;z-index:999;transition:opacity 0.4s;pointer-events:none}
 </style>
 </head>
 <body>
 <div id="root" style="max-width:860px;margin:0 auto;padding:0 14px 100px"></div>
+<div id="toast" class="toast" style="opacity:0"></div>
 
 <script>
 const VOTERS = ["Sarah","Maria","Erik","Ryan","Sam","Mads","Connor","Josh"];
@@ -63,6 +61,11 @@ const ACTS = [
   {id:25,flag:"🇦🇹",name:"Austria",act:"COSMÓ",song:"Tanzschein"},
 ];
 const MEDALS = ["🥇","🥈","🥉","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25"];
+const HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
+
+// When served by Apps Script, window.location.href IS the web app URL.
+// Strip query params to get the clean exec endpoint.
+const SCRIPT_URL = window.location.href.split('?')[0];
 
 let state = {
   ratings: {},
@@ -70,17 +73,107 @@ let state = {
   view: "rate",
   search: "",
   onlyRated: false,
-  showModal: false,
-  sheetConfig: null,
   syncStatus: "idle",
   syncMsg: "",
 };
 let syncTimer = null;
+let toastTimer = null;
+
+// ── SHEET I/O ─────────────────────────────────────────────
 
 function score(actId, r) {
   r = r || state.ratings;
   return VOTERS.reduce((s,_,vi) => s + (r[vi]?.[actId]||0), 0);
 }
+
+async function loadSheet() {
+  const res = await fetch(SCRIPT_URL + '?action=read');
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
+  const rows = d.values||[];
+  if(rows.length < 2) return null;
+  const r = {};
+  for(let vi=0;vi<VOTERS.length;vi++) r[vi]={};
+  for(let i=1;i<rows.length;i++){
+    const row = rows[i];
+    const aid = parseInt(row[0]);
+    if(!aid) continue;
+    for(let vi=0;vi<VOTERS.length;vi++){
+      const v = parseInt(row[4+vi])||0;
+      if(v>0) r[vi][aid]=v;
+    }
+  }
+  return r;
+}
+
+async function saveSheet() {
+  const rows = [HEADERS];
+  for(const a of ACTS){
+    const vc = VOTERS.map((_,vi)=>state.ratings[vi]?.[a.id]||0);
+    rows.push([a.id,a.name,a.act,a.song,...vc,score(a.id)]);
+  }
+  const res = await fetch(SCRIPT_URL, {
+    method: "POST",
+    body: JSON.stringify({action:"save", values:rows}),
+  });
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+function scheduleSync() {
+  clearTimeout(syncTimer);
+  state.syncStatus = "pending";
+  syncTimer = setTimeout(async () => {
+    state.syncStatus = "syncing"; render();
+    try {
+      await saveSheet();
+      state.syncStatus = "ok";
+      state.syncMsg = "Saved " + new Date().toLocaleTimeString();
+      showToast("✓ Saved to Sheets", "#6BCB77");
+    } catch(e) {
+      state.syncStatus = "error";
+      state.syncMsg = e.message || "Sync failed";
+      showToast("✕ " + state.syncMsg, "#FF6B9D");
+    }
+    render();
+  }, 1200);
+}
+
+// Poll for remote changes every 15s
+setInterval(async () => {
+  if(state.syncStatus==="syncing" || state.syncStatus==="pending") return;
+  try {
+    const r = await loadSheet();
+    if(r){ state.ratings=r; render(); }
+  } catch(_) {}
+}, 15000);
+
+// Load on startup
+(async () => {
+  try {
+    const r = await loadSheet();
+    if(r){ state.ratings=r; render(); }
+    state.syncStatus="ok"; state.syncMsg="Connected";
+    showToast("✓ Connected to Sheets", "#6BCB77");
+    render();
+  } catch(e) {
+    showToast("Could not reach Sheets — working offline", "#FF9F45");
+  }
+})();
+
+// ── TOAST ──────────────────────────────────────────────────
+
+function showToast(msg, color) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = color+'22';
+  el.style.border = '1px solid '+color+'55';
+  el.style.color = color;
+  el.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.opacity='0'; }, 3000);
+}
+
+// ── RENDER ─────────────────────────────────────────────────
 
 function sortedActs() {
   return [...ACTS].map(a=>({...a,score:score(a.id)}))
@@ -96,18 +189,16 @@ function buildApp() {
   const rated = ACTS.filter(a=>VOTERS.some((_,vi)=>(state.ratings[vi]?.[a.id]||0)>0)).length;
   const scol = {idle:"rgba(255,255,255,0.3)",pending:"#FFD93D",syncing:"#4D96FF",ok:"#6BCB77",error:"#FF6B9D"}[state.syncStatus];
   const sico = {idle:"○",pending:"◌",syncing:"◉",ok:"✓",error:"✕"}[state.syncStatus];
-  const slab = state.sheetConfig ? (state.syncMsg||"Sheets connected") : "Connect Sheets";
 
   return `
-  ${state.showModal ? buildModal() : ''}
   <div style="text-align:center;padding:28px 0 16px">
     <div style="font-size:48px;margin-bottom:-2px">🎤</div>
     <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(42px,9vw,74px);letter-spacing:3px;background:linear-gradient(130deg,#FF6B9D 0%,#FFD93D 45%,#4D96FF 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:.95;margin:4px 0 0">EUROVISION<br>2026</h1>
     <div style="margin-top:8px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
       <span style="color:rgba(255,255,255,0.35);font-size:11px;letter-spacing:2px;text-transform:uppercase">Vienna · ${rated}/${ACTS.length} rated</span>
-      <button id="sheetBtn" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.04);border:1px solid ${scol}44;border-radius:100px;padding:4px 10px;font-size:11px;color:${scol};font-weight:700;letter-spacing:.5px">
-        <span style="font-size:13px">${sico}</span>${slab}
-      </button>
+      <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.04);border:1px solid ${scol}44;border-radius:100px;padding:4px 10px;font-size:11px;color:${scol};font-weight:700;letter-spacing:.5px">
+        ${sico} ${state.syncMsg||"Sheets"}
+      </span>
     </div>
   </div>
 
@@ -219,113 +310,12 @@ function buildLeaderboard() {
   </div>`;
 }
 
-function buildModal() {
-  return `<div class="modal-overlay" id="modalOverlay">
-    <div class="modal-box">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
-        <div>
-          <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;color:#4D96FF;letter-spacing:1px;margin-bottom:4px">📊 Connect Google Sheets</h2>
-          <p style="color:rgba(255,255,255,0.4);font-size:12px">Sync ratings live across all devices</p>
-        </div>
-        <button id="closeModal" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;padding:2px 6px">✕</button>
-      </div>
-      <div style="background:rgba(77,150,255,0.08);border:1px solid rgba(77,150,255,0.2);border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:11.5px;color:rgba(255,255,255,0.55);line-height:1.7">
-        <strong style="color:#4D96FF">Setup:</strong><br>
-        1. Open your Google Sheet → <strong>Extensions → Apps Script</strong><br>
-        2. Paste the provided Apps Script code and save<br>
-        3. Click <strong>Deploy → New deployment</strong> → type: <strong>Web app</strong><br>
-        4. Set "Execute as" → <strong>Me</strong>, "Who has access" → <strong>Anyone</strong><br>
-        5. Copy the <strong>Web App URL</strong> and paste it below
-      </div>
-      <label style="display:block;font-size:11px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:.5px;margin-bottom:5px">WEB APP URL</label>
-      <input class="modal-input" id="webAppUrlInput" type="text" placeholder="https://script.google.com/macros/s/…/exec" style="margin-bottom:14px">
-      <div id="modalError" style="display:none;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.3);border-radius:7px;padding:8px 11px;color:#ff7070;font-size:11.5px;margin-bottom:12px"></div>
-      <button class="connect-btn" id="connectBtn">🔗 Connect &amp; Initialise Sheet</button>
-    </div>
-  </div>`;
-}
-
-const HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
-
-async function loadSheet(webAppUrl) {
-  const res = await fetch(webAppUrl);
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-  const d = await res.json();
-  const rows = d.values||[];
-  if(rows.length<2) return null;
-  const r = {};
-  for(let vi=0;vi<VOTERS.length;vi++) r[vi]={};
-  for(let i=1;i<rows.length;i++){
-    const row=rows[i];
-    const aid=parseInt(row[0]);
-    if(!aid) continue;
-    for(let vi=0;vi<VOTERS.length;vi++){
-      const v=parseInt(row[4+vi])||0;
-      if(v>0) r[vi][aid]=v;
-    }
-  }
-  return r;
-}
-
-async function initSheet(webAppUrl) {
-  const rows = [HEADERS];
-  for(const a of ACTS) rows.push([a.id,a.name,a.act,a.song,...VOTERS.map(()=>0),0]);
-  const res = await fetch(webAppUrl, {
-    method:"POST",
-    body: JSON.stringify({action:"save", values:rows}),
-  });
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-}
-
-async function saveSheet() {
-  if(!state.sheetConfig) return;
-  const rows = [HEADERS];
-  for(const a of ACTS){
-    const vc = VOTERS.map((_,vi)=>state.ratings[vi]?.[a.id]||0);
-    rows.push([a.id,a.name,a.act,a.song,...vc,score(a.id)]);
-  }
-  const res = await fetch(state.sheetConfig.webAppUrl, {
-    method:"POST",
-    body: JSON.stringify({action:"save", values:rows}),
-  });
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-}
-
-function scheduleSync() {
-  if(!state.sheetConfig) return;
-  clearTimeout(syncTimer);
-  state.syncStatus="pending"; state.syncMsg="";
-  syncTimer = setTimeout(async()=>{
-    state.syncStatus="syncing"; render();
-    try{
-      await saveSheet();
-      state.syncStatus="ok";
-      state.syncMsg="Saved "+new Date().toLocaleTimeString();
-    }catch(e){
-      state.syncStatus="error";
-      state.syncMsg=e.message||"Sync failed";
-    }
-    render();
-  }, 1500);
-}
-
-setInterval(async()=>{
-  if(!state.sheetConfig||state.syncStatus==="syncing"||state.syncStatus==="pending") return;
-  try{
-    const r = await loadSheet(state.sheetConfig.webAppUrl);
-    if(r){state.ratings=r;render();}
-  }catch(_){}
-}, 15000);
-
 function attachEvents() {
   document.querySelectorAll('.voter-pill').forEach(b=>b.addEventListener('click',()=>{
     state.activeVoter=parseInt(b.dataset.vi); render();
   }));
   document.getElementById('tabRate')?.addEventListener('click',()=>{state.view='rate';render();});
   document.getElementById('tabLB')?.addEventListener('click',()=>{state.view='leaderboard';render();});
-  document.getElementById('sheetBtn')?.addEventListener('click',()=>{state.showModal=true;render();});
-  document.getElementById('closeModal')?.addEventListener('click',()=>{state.showModal=false;render();});
-  document.getElementById('modalOverlay')?.addEventListener('click',e=>{if(e.target.id==='modalOverlay'){state.showModal=false;render();}});
   document.getElementById('onlyRatedBtn')?.addEventListener('click',()=>{state.onlyRated=!state.onlyRated;render();});
   const si = document.getElementById('searchInput');
   si?.addEventListener('input',e=>{state.search=e.target.value;render();si.focus();});
@@ -336,26 +326,6 @@ function attachEvents() {
     if(s===cur) delete state.ratings[vi][aid]; else state.ratings[vi][aid]=s;
     scheduleSync(); render();
   }));
-  document.getElementById('connectBtn')?.addEventListener('click',async()=>{
-    const webAppUrl=document.getElementById('webAppUrlInput').value.trim();
-    const errEl=document.getElementById('modalError');
-    if(!webAppUrl){errEl.textContent="Please enter your Web App URL.";errEl.style.display='block';return;}
-    const btn=document.getElementById('connectBtn');
-    btn.textContent="Connecting…"; btn.disabled=true; errEl.style.display='none';
-    try{
-      let loaded=null;
-      try{loaded=await loadSheet(webAppUrl);}catch(_){}
-      if(!loaded){await initSheet(webAppUrl);loaded={};}
-      state.sheetConfig={webAppUrl};
-      if(loaded&&Object.keys(loaded).some(k=>Object.keys(loaded[k]).length>0)) state.ratings=loaded;
-      state.syncStatus="ok"; state.syncMsg="Connected!"; state.showModal=false;
-      render();
-    }catch(e){
-      errEl.textContent=e.message||"Connection failed. Check your Web App URL.";
-      errEl.style.display='block';
-      btn.textContent="🔗 Connect & Initialise Sheet"; btn.disabled=false;
-    }
-  });
 }
 
 render();
