@@ -45,20 +45,35 @@
                     </select>
                 </div>
 
-                <!-- Country Selector -->
+                <!-- Country Selector (In official 2026 Grand Final Running Order) -->
                 <div>
                     <label class="block text-sm font-semibold text-purple-300 mb-2">Select Country</label>
                     <select id="actSelect" class="w-full bg-purple-950/50 border border-purple-500/30 rounded-xl p-3 text-white focus:outline-none focus:ring-2 focus:ring-pink-500">
-                        <option value="Austria">🇦🇹 Austria</option>
-                        <option value="Croatia">🇭🇷 Croatia</option>
-                        <option value="France">🇫🇷 France</option>
-                        <option value="Germany">🇩🇪 Germany</option>
-                        <option value="Italy">🇮🇹 Italy</option>
-                        <option value="Sweden">🇸🇪 Sweden</option>
-                        <option value="Switzerland">🇨🇭 Switzerland</option>
-                        <option value="Ukraine">🇺🇦 Ukraine</option>
-                        <option value="United Kingdom">🇬🇧 United Kingdom</option>
-                        <!-- Feel free to swap or add the rest of the 26 final acts here! -->
+                        <option value="Denmark">01. 🇩🇰 Denmark</option>
+                        <option value="Germany">02. 🇩🇪 Germany</option>
+                        <option value="Israel">03. 🇮🇱 Israel</option>
+                        <option value="Belgium">04. 🇧🇪 Belgium</option>
+                        <option value="Albania">05. 🇦🇱 Albania</option>
+                        <option value="Greece">06. 🇬🇷 Greece</option>
+                        <option value="Ukraine">07. 🇺🇦 Ukraine</option>
+                        <option value="Australia">08. 🇦🇺 Australia</option>
+                        <option value="Serbia">09. 🇷🇸 Serbia</option>
+                        <option value="Malta">10. 🇲🇹 Malta</option>
+                        <option value="Czechia">11. 🇨🇿 Czechia</option>
+                        <option value="Bulgaria">12. 🇧🇬 Bulgaria</option>
+                        <option value="Croatia">13. 🇭🇷 Croatia</option>
+                        <option value="United Kingdom">14. 🇬🇧 United Kingdom</option>
+                        <option value="France">15. 🇫🇷 France</option>
+                        <option value="Moldova">16. 🇲🇩 Moldova</option>
+                        <option value="Finland">17. 🇫🇮 Finland</option>
+                        <option value="Poland">18. 🇵🇱 Poland</option>
+                        <option value="Lithuania">19. 🇱🇹 Lithuania</option>
+                        <option value="Sweden">20. 🇸🇪 Sweden</option>
+                        <option value="Cyprus">21. 🇨🇾 Cyprus</option>
+                        <option value="Italy">22. 🇮🇹 Italy</option>
+                        <option value="Norway">23. 🇳🇴 Norway</option>
+                        <option value="Romania">24. 🇷🇴 Romania</option>
+                        <option value="Austria">25. 🇦🇹 Austria</option>
                     </select>
                 </div>
 
@@ -139,7 +154,7 @@
             const country = document.getElementById('actSelect').value;
             const score = parseInt(slider.value);
 
-            // Send a clean JSON payload directly to the Google Sheet API
+            // Send clean JSON straight to the Google Sheet API via SheetDB
             fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -147,10 +162,10 @@
             })
             .then(res => res.json())
             .then(() => {
-                alert(`Vote registered! sent ${score} points to ${country}.`);
+                alert(`Vote registered! Sent ${score} points to ${country}.`);
                 slider.value = 12;
                 sliderValue.textContent = 12;
-                fetchLeaderboard(); // Instantly update scoreboard
+                fetchLeaderboard(); // Update scoreboard right away
             })
             .catch(err => { console.error("API error:", err); alert("Error saving vote."); });
         });
