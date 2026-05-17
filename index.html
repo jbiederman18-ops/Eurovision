@@ -231,42 +231,26 @@ function buildModal() {
       </div>
       <div style="background:rgba(77,150,255,0.08);border:1px solid rgba(77,150,255,0.2);border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:11.5px;color:rgba(255,255,255,0.55);line-height:1.7">
         <strong style="color:#4D96FF">Setup:</strong><br>
-        1. Create a new Google Sheet<br>
-        2. Share → <em>Anyone with the link can edit</em><br>
-        3. Enable <strong>Google Sheets API</strong> in <a href="https://console.cloud.google.com" target="_blank" style="color:#4D96FF">Google Cloud Console</a><br>
-        4. Create an <strong>API Key</strong><br>
-        5. Sheet ID is in the URL: …/d/<strong style="color:#FFD93D">SHEET_ID</strong>/edit
+        1. Open your Google Sheet → <strong>Extensions → Apps Script</strong><br>
+        2. Paste the provided Apps Script code and save<br>
+        3. Click <strong>Deploy → New deployment</strong> → type: <strong>Web app</strong><br>
+        4. Set "Execute as" → <strong>Me</strong>, "Who has access" → <strong>Anyone</strong><br>
+        5. Copy the <strong>Web App URL</strong> and paste it below
       </div>
-      <label style="display:block;font-size:11px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:.5px;margin-bottom:5px">GOOGLE SHEETS API KEY</label>
-      <input class="modal-input" id="apiKeyInput" type="password" placeholder="AIzaSy…" style="margin-bottom:12px">
-      <label style="display:block;font-size:11px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:.5px;margin-bottom:5px">SHEET ID</label>
-      <input class="modal-input" id="sheetIdInput" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" style="margin-bottom:14px">
+      <label style="display:block;font-size:11px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:.5px;margin-bottom:5px">WEB APP URL</label>
+      <input class="modal-input" id="webAppUrlInput" type="text" placeholder="https://script.google.com/macros/s/…/exec" style="margin-bottom:14px">
       <div id="modalError" style="display:none;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.3);border-radius:7px;padding:8px 11px;color:#ff7070;font-size:11.5px;margin-bottom:12px"></div>
       <button class="connect-btn" id="connectBtn">🔗 Connect &amp; Initialise Sheet</button>
     </div>
   </div>`;
 }
 
-async function sheetsReq(apiKey, sheetId, method, range, body) {
-  const base = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values`;
-  const url = method==="GET"
-    ? `${base}/${encodeURIComponent(range)}?key=${apiKey}`
-    : `${base}/${encodeURIComponent(range)}?valueInputOption=RAW&key=${apiKey}`;
-  const res = await fetch(url,{method,headers:{"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
-  return res.json();
-}
-
 const HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
 
-async function initSheet(apiKey, sheetId) {
-  const rows = [HEADERS];
-  for(const a of ACTS) rows.push([a.id,a.name,a.act,a.song,...VOTERS.map(()=>0),0]);
-  await sheetsReq(apiKey,sheetId,"PUT","Sheet1!A1:M26",{values:rows});
-}
-
-async function loadSheet(apiKey, sheetId) {
-  const d = await sheetsReq(apiKey,sheetId,"GET","Sheet1!A1:M26");
+async function loadSheet(webAppUrl) {
+  const res = await fetch(webAppUrl);
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const d = await res.json();
   const rows = d.values||[];
   if(rows.length<2) return null;
   const r = {};
@@ -283,13 +267,28 @@ async function loadSheet(apiKey, sheetId) {
   return r;
 }
 
+async function initSheet(webAppUrl) {
+  const rows = [HEADERS];
+  for(const a of ACTS) rows.push([a.id,a.name,a.act,a.song,...VOTERS.map(()=>0),0]);
+  const res = await fetch(webAppUrl, {
+    method:"POST",
+    body: JSON.stringify({action:"save", values:rows}),
+  });
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
 async function saveSheet() {
   if(!state.sheetConfig) return;
-  const updates = ACTS.map(a => {
+  const rows = [HEADERS];
+  for(const a of ACTS){
     const vc = VOTERS.map((_,vi)=>state.ratings[vi]?.[a.id]||0);
-    return [a.id,a.name,a.act,a.song,...vc,score(a.id)];
+    rows.push([a.id,a.name,a.act,a.song,...vc,score(a.id)]);
+  }
+  const res = await fetch(state.sheetConfig.webAppUrl, {
+    method:"POST",
+    body: JSON.stringify({action:"save", values:rows}),
   });
-  await sheetsReq(state.sheetConfig.apiKey,state.sheetConfig.sheetId,"PUT","Sheet1!A2:M26",{values:updates});
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
 function scheduleSync() {
@@ -313,7 +312,7 @@ function scheduleSync() {
 setInterval(async()=>{
   if(!state.sheetConfig||state.syncStatus==="syncing"||state.syncStatus==="pending") return;
   try{
-    const r = await loadSheet(state.sheetConfig.apiKey,state.sheetConfig.sheetId);
+    const r = await loadSheet(state.sheetConfig.webAppUrl);
     if(r){state.ratings=r;render();}
   }catch(_){}
 }, 15000);
@@ -338,22 +337,21 @@ function attachEvents() {
     scheduleSync(); render();
   }));
   document.getElementById('connectBtn')?.addEventListener('click',async()=>{
-    const apiKey=document.getElementById('apiKeyInput').value.trim();
-    const sheetId=document.getElementById('sheetIdInput').value.trim();
+    const webAppUrl=document.getElementById('webAppUrlInput').value.trim();
     const errEl=document.getElementById('modalError');
-    if(!apiKey||!sheetId){errEl.textContent="Both fields are required.";errEl.style.display='block';return;}
+    if(!webAppUrl){errEl.textContent="Please enter your Web App URL.";errEl.style.display='block';return;}
     const btn=document.getElementById('connectBtn');
     btn.textContent="Connecting…"; btn.disabled=true; errEl.style.display='none';
     try{
       let loaded=null;
-      try{loaded=await loadSheet(apiKey,sheetId);}catch(_){}
-      if(!loaded){await initSheet(apiKey,sheetId);loaded={};}
-      state.sheetConfig={apiKey,sheetId};
+      try{loaded=await loadSheet(webAppUrl);}catch(_){}
+      if(!loaded){await initSheet(webAppUrl);loaded={};}
+      state.sheetConfig={webAppUrl};
       if(loaded&&Object.keys(loaded).some(k=>Object.keys(loaded[k]).length>0)) state.ratings=loaded;
       state.syncStatus="ok"; state.syncMsg="Connected!"; state.showModal=false;
       render();
     }catch(e){
-      errEl.textContent=e.message||"Connection failed. Check your API key and Sheet ID.";
+      errEl.textContent=e.message||"Connection failed. Check your Web App URL.";
       errEl.style.display='block';
       btn.textContent="🔗 Connect & Initialise Sheet"; btn.disabled=false;
     }
