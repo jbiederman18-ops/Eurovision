@@ -1,565 +1,366 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eurovision 2026 Party Ranker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;700&family=Barlow+Condensed:wght@700;800;900&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0c0c18;color:#fff;font-family:'Barlow',sans-serif;min-height:100vh}
+  button{cursor:pointer;font-family:'Barlow',sans-serif}
+  input{font-family:'Barlow',sans-serif}
+  input::placeholder{color:rgba(255,255,255,0.2)}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+  .pill{border-radius:100px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.45);padding:6px 14px;font-weight:700;font-size:12px;transition:all 0.2s}
+  .tab{flex:1;padding:9px 0;border:none;border-radius:9px;background:none;color:rgba(255,255,255,0.35);font-weight:700;font-size:13px;transition:all 0.2s;letter-spacing:.5px}
+  .tab.active{background:rgba(255,255,255,0.09);color:#fff}
+  .act-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:13px 14px 14px;position:relative;overflow:hidden;margin-bottom:8px}
+  .score-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,#FF6B9D,#FFD93D);transition:width 0.5s cubic-bezier(.4,0,.2,1);border-radius:0 1px 0 0}
+  .voter-cell{border-radius:8px;padding:4px 7px;transition:all 0.2s;border:1px solid rgba(255,255,255,0.05)}
+  .star-btn{background:none;border:none;font-size:14px;padding:1px;line-height:1;cursor:pointer;transition:all 0.1s}
+  .lb-row{display:flex;align-items:center;gap:10px;border-radius:10px;padding:8px 12px;margin-bottom:4px}
+  .modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal-box{background:#12121e;border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:24px;max-width:460px;width:100%}
+  .modal-input{width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:9px 12px;font-size:13px;outline:none;box-sizing:border-box}
+  .connect-btn{width:100%;padding:11px;background:rgba(77,150,255,0.2);border:1px solid rgba(77,150,255,0.5);border-radius:9px;color:#4D96FF;font-weight:800;font-size:14px;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;transition:all 0.2s}
+  .section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div id="root" style="max-width:860px;margin:0 auto;padding:0 14px 100px"></div>
 
-/* ─── CONFIG ─────────────────────────────────────────── */
-const VOTERS = ["Sarah", "Maria", "Erik", "Ryan", "Sam", "Mads", "Connor", "Josh"];
-const VOTER_COLORS = ["#FF6B9D", "#FFD93D", "#6BCB77", "#4D96FF", "#FF9F45", "#C77DFF", "#FF5E5E", "#00D4C8"];
-const VOTER_EMOJIS = ["🌸", "✨", "🌿", "🌊", "🔥", "💜", "⚡", "🎯"];
-
-// Eurovision 2026 Grand Final — Vienna, 16 May 2026
+<script>
+const VOTERS = ["Sarah","Maria","Erik","Ryan","Sam","Mads","Connor","Josh"];
+const VCOLORS = ["#FF6B9D","#FFD93D","#6BCB77","#4D96FF","#FF9F45","#C77DFF","#FF5E5E","#00D4C8"];
+const VEMOJI  = ["🌸","✨","🌿","🌊","🔥","💜","⚡","🎯"];
 const ACTS = [
-  { id: 1,  country: "🇩🇰", name: "Denmark",        act: "Søren Torpegaard Lund",       song: "Før Vi Går Hjem" },
-  { id: 2,  country: "🇩🇪", name: "Germany",         act: "Sarah Engels",                 song: "Fire" },
-  { id: 3,  country: "🇮🇱", name: "Israel",          act: "Noam Bettan",                  song: "Michelle" },
-  { id: 4,  country: "🇧🇪", name: "Belgium",         act: "ESSYLA",                       song: "Dancing on the Ice" },
-  { id: 5,  country: "🇦🇱", name: "Albania",         act: "Alis",                         song: "Nân" },
-  { id: 6,  country: "🇬🇷", name: "Greece",          act: "Akylas",                       song: "Ferto" },
-  { id: 7,  country: "🇺🇦", name: "Ukraine",         act: "LELÉKA",                       song: "Ridnym" },
-  { id: 8,  country: "🇦🇺", name: "Australia",       act: "Delta Goodrem",                song: "Eclipse" },
-  { id: 9,  country: "🇷🇸", name: "Serbia",          act: "LAVINA",                       song: "Kraj Mene" },
-  { id: 10, country: "🇲🇹", name: "Malta",           act: "AIDAN",                        song: "Bella" },
-  { id: 11, country: "🇨🇿", name: "Czechia",         act: "Daniel Zizka",                 song: "CROSSROADS" },
-  { id: 12, country: "🇧🇬", name: "Bulgaria",        act: "DARA",                         song: "Bangaranga" },
-  { id: 13, country: "🇭🇷", name: "Croatia",         act: "LELEK",                        song: "Andromeda" },
-  { id: 14, country: "🇬🇧", name: "United Kingdom",  act: "LOOK MUM NO COMPUTER",         song: "Eins, Zwei, Drei" },
-  { id: 15, country: "🇫🇷", name: "France",          act: "Monroe",                       song: "Regarde !" },
-  { id: 16, country: "🇲🇩", name: "Moldova",         act: "Satoshi",                      song: "Viva, Moldova!" },
-  { id: 17, country: "🇫🇮", name: "Finland",         act: "Linda Lampenius x Pete Parkkonen", song: "Liekinheitin" },
-  { id: 18, country: "🇵🇱", name: "Poland",          act: "ALICJA",                       song: "Pray" },
-  { id: 19, country: "🇱🇹", name: "Lithuania",       act: "Lion Ceccah",                  song: "Sólo Quiero Más" },
-  { id: 20, country: "🇸🇪", name: "Sweden",          act: "FELICIA",                      song: "My System" },
-  { id: 21, country: "🇨🇾", name: "Cyprus",          act: "Antigoni",                     song: "JALLA" },
-  { id: 22, country: "🇮🇹", name: "Italy",           act: "Sal Da Vinci",                 song: "Per Sempre Sì" },
-  { id: 23, country: "🇳🇴", name: "Norway",          act: "JONAS LOVV",                   song: "YA YA YA" },
-  { id: 24, country: "🇷🇴", name: "Romania",         act: "Alexandra Căpitănescu",        song: "Choke Me" },
-  { id: 25, country: "🇦🇹", name: "Austria",         act: "COSMÓ",                        song: "Tanzschein" },
+  {id:1,flag:"🇩🇰",name:"Denmark",act:"Søren Torpegaard Lund",song:"Før Vi Går Hjem"},
+  {id:2,flag:"🇩🇪",name:"Germany",act:"Sarah Engels",song:"Fire"},
+  {id:3,flag:"🇮🇱",name:"Israel",act:"Noam Bettan",song:"Michelle"},
+  {id:4,flag:"🇧🇪",name:"Belgium",act:"ESSYLA",song:"Dancing on the Ice"},
+  {id:5,flag:"🇦🇱",name:"Albania",act:"Alis",song:"Nân"},
+  {id:6,flag:"🇬🇷",name:"Greece",act:"Akylas",song:"Ferto"},
+  {id:7,flag:"🇺🇦",name:"Ukraine",act:"LELÉKA",song:"Ridnym"},
+  {id:8,flag:"🇦🇺",name:"Australia",act:"Delta Goodrem",song:"Eclipse"},
+  {id:9,flag:"🇷🇸",name:"Serbia",act:"LAVINA",song:"Kraj Mene"},
+  {id:10,flag:"🇲🇹",name:"Malta",act:"AIDAN",song:"Bella"},
+  {id:11,flag:"🇨🇿",name:"Czechia",act:"Daniel Zizka",song:"CROSSROADS"},
+  {id:12,flag:"🇧🇬",name:"Bulgaria",act:"DARA",song:"Bangaranga"},
+  {id:13,flag:"🇭🇷",name:"Croatia",act:"LELEK",song:"Andromeda"},
+  {id:14,flag:"🇬🇧",name:"United Kingdom",act:"LOOK MUM NO COMPUTER",song:"Eins, Zwei, Drei"},
+  {id:15,flag:"🇫🇷",name:"France",act:"Monroe",song:"Regarde !"},
+  {id:16,flag:"🇲🇩",name:"Moldova",act:"Satoshi",song:"Viva, Moldova!"},
+  {id:17,flag:"🇫🇮",name:"Finland",act:"Linda Lampenius x Pete Parkkonen",song:"Liekinheitin"},
+  {id:18,flag:"🇵🇱",name:"Poland",act:"ALICJA",song:"Pray"},
+  {id:19,flag:"🇱🇹",name:"Lithuania",act:"Lion Ceccah",song:"Sólo Quiero Más"},
+  {id:20,flag:"🇸🇪",name:"Sweden",act:"FELICIA",song:"My System"},
+  {id:21,flag:"🇨🇾",name:"Cyprus",act:"Antigoni",song:"JALLA"},
+  {id:22,flag:"🇮🇹",name:"Italy",act:"Sal Da Vinci",song:"Per Sempre Sì"},
+  {id:23,flag:"🇳🇴",name:"Norway",act:"JONAS LOVV",song:"YA YA YA"},
+  {id:24,flag:"🇷🇴",name:"Romania",act:"Alexandra Căpitănescu",song:"Choke Me"},
+  {id:25,flag:"🇦🇹",name:"Austria",act:"COSMÓ",song:"Tanzschein"},
 ];
+const MEDALS = ["🥇","🥈","🥉","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25"];
 
-const RANK_MEDALS = ["🥇","🥈","🥉","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25"];
+let state = {
+  ratings: {},
+  activeVoter: 0,
+  view: "rate",
+  search: "",
+  onlyRated: false,
+  showModal: false,
+  sheetConfig: null,
+  syncStatus: "idle",
+  syncMsg: "",
+};
+let syncTimer = null;
 
-/* ─── GOOGLE SHEETS HELPERS ──────────────────────────── */
-// Sheet layout: Row 1 = headers, Rows 2-26 = one per act
-// Columns: ActID | Country | Act | Song | Alex | Billie | Carlos | Dana | Emi | Frankie | TotalScore
-const SHEET_HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
+function score(actId, r) {
+  r = r || state.ratings;
+  return VOTERS.reduce((s,_,vi) => s + (r[vi]?.[actId]||0), 0);
+}
 
-async function sheetsRequest(apiKey, sheetId, method, range, body) {
+function sortedActs() {
+  return [...ACTS].map(a=>({...a,score:score(a.id)}))
+    .sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
+}
+
+function render() {
+  document.getElementById('root').innerHTML = buildApp();
+  attachEvents();
+}
+
+function buildApp() {
+  const rated = ACTS.filter(a=>VOTERS.some((_,vi)=>(state.ratings[vi]?.[a.id]||0)>0)).length;
+  const scol = {idle:"rgba(255,255,255,0.3)",pending:"#FFD93D",syncing:"#4D96FF",ok:"#6BCB77",error:"#FF6B9D"}[state.syncStatus];
+  const sico = {idle:"○",pending:"◌",syncing:"◉",ok:"✓",error:"✕"}[state.syncStatus];
+  const slab = state.sheetConfig ? (state.syncMsg||"Sheets connected") : "Connect Sheets";
+
+  return `
+  ${state.showModal ? buildModal() : ''}
+  <div style="text-align:center;padding:28px 0 16px">
+    <div style="font-size:48px;margin-bottom:-2px">🎤</div>
+    <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(42px,9vw,74px);letter-spacing:3px;background:linear-gradient(130deg,#FF6B9D 0%,#FFD93D 45%,#4D96FF 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:.95;margin:4px 0 0">EUROVISION<br>2026</h1>
+    <div style="margin-top:8px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
+      <span style="color:rgba(255,255,255,0.35);font-size:11px;letter-spacing:2px;text-transform:uppercase">Vienna · ${rated}/${ACTS.length} rated</span>
+      <button id="sheetBtn" style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,0.04);border:1px solid ${scol}44;border-radius:100px;padding:4px 10px;font-size:11px;color:${scol};font-weight:700;letter-spacing:.5px">
+        <span style="font-size:13px">${sico}</span>${slab}
+      </button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:16px">
+    ${VOTERS.map((v,i) => {
+      const rc = Object.keys(state.ratings[i]||{}).length;
+      const active = i===state.activeVoter;
+      return `<button class="pill voter-pill" data-vi="${i}" style="${active?`border-color:${VCOLORS[i]};background:${VCOLORS[i]}22;color:${VCOLORS[i]}`:''}">${VEMOJI[i]} ${v}${rc>0?` <span style="opacity:.55;font-weight:400">(${rc})</span>`:''}</button>`;
+    }).join('')}
+  </div>
+
+  <div style="display:flex;gap:0;margin-bottom:16px;background:rgba(255,255,255,0.03);border-radius:12px;padding:4px">
+    <button class="tab${state.view==='rate'?' active':''}" id="tabRate">⭐  Rate Acts</button>
+    <button class="tab${state.view==='leaderboard'?' active':''}" id="tabLB">🏆  Leaderboard</button>
+  </div>
+
+  ${state.view==='rate' ? buildRateView() : buildLeaderboard()}
+  `;
+}
+
+function buildRateView() {
+  const sa = sortedActs();
+  const q = state.search.toLowerCase();
+  const acts = ACTS.filter(a => {
+    if(q && !a.name.toLowerCase().includes(q) && !a.act.toLowerCase().includes(q) && !a.song.toLowerCase().includes(q)) return false;
+    if(state.onlyRated && !VOTERS.some((_,vi)=>(state.ratings[vi]?.[a.id]||0)>0)) return false;
+    return true;
+  }).map(a=>({...a,score:score(a.id)}));
+
+  return `
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input id="searchInput" value="${state.search.replace(/"/g,'&quot;')}" placeholder="Search country, artist, or song…"
+      style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#fff;padding:9px 13px;font-size:13px;outline:none">
+    <button id="onlyRatedBtn" style="padding:9px 13px;border-radius:10px;border:1px solid ${state.onlyRated?'#FFD93D55':'rgba(255,255,255,0.08)'};background:${state.onlyRated?'rgba(255,217,61,0.1)':'rgba(255,255,255,0.03)'};color:${state.onlyRated?'#FFD93D':'rgba(255,255,255,0.4)'};font-size:12px;font-weight:700;white-space:nowrap">Rated only</button>
+  </div>
+  ${acts.length===0?'<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.25);font-size:14px">No acts match 🔍</div>':''}
+  ${acts.map(a => {
+    const rank = sa.findIndex(x=>x.id===a.id);
+    const pct = ACTS.length>1?((ACTS.length-rank)/(ACTS.length-1))*100:0;
+    const topBorder = rank<3&&a.score>0?["rgba(255,215,0,0.35)","rgba(192,192,192,0.25)","rgba(205,127,50,0.25)"][rank]:"rgba(255,255,255,0.07)";
+    return `
+    <div class="act-card" style="border-color:${topBorder}">
+      <div class="score-bar" style="width:${pct}%"></div>
+      <div style="display:flex;gap:11px;align-items:flex-start;margin-bottom:9px">
+        <span style="font-size:30px;line-height:1;flex-shrink:0">${a.flag}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:#fff;letter-spacing:.3px">${a.name}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px">${a.act} · <em>"${a.song}"</em></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          ${a.score>0?`<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:24px;color:#FFD93D;line-height:1">${a.score}</div><div style="font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1px">PTS</div>`:''}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+        ${VOTERS.map((v,vi) => {
+          const cur = state.ratings[vi]?.[a.id]||0;
+          const active = vi===state.activeVoter;
+          const stars = [1,2,3,4,5].map(s=>`<button class="star-btn" data-vi="${vi}" data-aid="${a.id}" data-s="${s}" style="opacity:${s<=cur?1:0.18};color:${s<=cur?VCOLORS[vi]:'#fff'};transform:${s<=cur?'scale(1.08)':'scale(1)'}">★</button>`).join('');
+          return `<div class="voter-cell" style="${active?`background:${VCOLORS[vi]}18;border-color:${VCOLORS[vi]}55`:''}">
+            <div style="font-size:9px;color:${VCOLORS[vi]};font-weight:700;margin-bottom:2px;letter-spacing:.2px">${VEMOJI[vi]} ${v}</div>
+            <div style="display:flex;gap:0">${stars}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+function buildLeaderboard() {
+  const sa = sortedActs().filter(a=>a.score>0);
+  const medalBgs = ["rgba(255,215,0,0.08)","rgba(192,192,192,0.06)","rgba(205,127,50,0.06)"];
+  const medalBorders = ["rgba(255,215,0,0.3)","rgba(192,192,192,0.2)","rgba(205,127,50,0.2)"];
+
+  return `
+  <div style="margin-bottom:26px">
+    <div class="section-title" style="color:#FFD93D">🌍 Group Ranking</div>
+    ${sa.length===0?'<div style="text-align:center;padding:28px;color:rgba(255,255,255,0.25)">No ratings yet — start scoring! ⭐</div>':''}
+    ${sa.map((a,i) => `
+    <div class="lb-row" style="background:${medalBgs[i]||'rgba(255,255,255,0.025)'};border:1px solid ${medalBorders[i]||'rgba(255,255,255,0.06)'}">
+      <span style="font-size:${i<3?19:12}px;width:26px;text-align:center;font-weight:700;color:rgba(255,255,255,0.55)">${MEDALS[i]}</span>
+      <span style="font-size:21px">${a.flag}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">${a.name}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.35)">${a.act} · <em>"${a.song}"</em></div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:160px">
+        ${VOTERS.map((_,vi)=>{const s=state.ratings[vi]?.[a.id]||0;return s>0?`<span style="font-size:9px;color:${VCOLORS[vi]};font-weight:700">${VEMOJI[vi]}${s}★</span>`:''}).join('')}
+      </div>
+      <span style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;color:#FFD93D;min-width:32px;text-align:right">${a.score}</span>
+    </div>`).join('')}
+  </div>
+
+  <div class="section-title" style="color:#FF6B9D">🎯 Individual Top 5s</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:9px">
+    ${VOTERS.map((v,vi) => {
+      const vr = state.ratings[vi]||{};
+      const top = ACTS.filter(a=>(vr[a.id]||0)>0).sort((a,b)=>(vr[b.id]||0)-(vr[a.id]||0)).slice(0,5);
+      return `<div style="background:${VCOLORS[vi]}0d;border:1px solid ${VCOLORS[vi]}2a;border-radius:11px;padding:11px 13px">
+        <div style="color:${VCOLORS[vi]};font-weight:800;font-size:14px;margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px">${VEMOJI[vi]} ${v.toUpperCase()}</div>
+        ${top.length===0?'<div style="color:rgba(255,255,255,0.2);font-size:11px">No ratings yet</div>':''}
+        ${top.map((a,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+          <span style="font-size:${i<3?15:10}px;width:18px;text-align:center">${MEDALS[i]}</span>
+          <span style="font-size:15px">${a.flag}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.65);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
+          <span style="color:${VCOLORS[vi]};font-size:12px">${'★'.repeat(vr[a.id])}</span>
+        </div>`).join('')}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function buildModal() {
+  return `<div class="modal-overlay" id="modalOverlay">
+    <div class="modal-box">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+        <div>
+          <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800;color:#4D96FF;letter-spacing:1px;margin-bottom:4px">📊 Connect Google Sheets</h2>
+          <p style="color:rgba(255,255,255,0.4);font-size:12px">Sync ratings live across all devices</p>
+        </div>
+        <button id="closeModal" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;padding:2px 6px">✕</button>
+      </div>
+      <div style="background:rgba(77,150,255,0.08);border:1px solid rgba(77,150,255,0.2);border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:11.5px;color:rgba(255,255,255,0.55);line-height:1.7">
+        <strong style="color:#4D96FF">Setup:</strong><br>
+        1. Create a new Google Sheet<br>
+        2. Share → <em>Anyone with the link can edit</em><br>
+        3. Enable <strong>Google Sheets API</strong> in <a href="https://console.cloud.google.com" target="_blank" style="color:#4D96FF">Google Cloud Console</a><br>
+        4. Create an <strong>API Key</strong><br>
+        5. Sheet ID is in the URL: …/d/<strong style="color:#FFD93D">SHEET_ID</strong>/edit
+      </div>
+      <label style="display:block;font-size:11px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:.5px;margin-bottom:5px">GOOGLE SHEETS API KEY</label>
+      <input class="modal-input" id="apiKeyInput" type="password" placeholder="AIzaSy…" style="margin-bottom:12px">
+      <label style="display:block;font-size:11px;color:rgba(255,255,255,0.45);font-weight:700;letter-spacing:.5px;margin-bottom:5px">SHEET ID</label>
+      <input class="modal-input" id="sheetIdInput" type="text" placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms" style="margin-bottom:14px">
+      <div id="modalError" style="display:none;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.3);border-radius:7px;padding:8px 11px;color:#ff7070;font-size:11.5px;margin-bottom:12px"></div>
+      <button class="connect-btn" id="connectBtn">🔗 Connect &amp; Initialise Sheet</button>
+    </div>
+  </div>`;
+}
+
+async function sheetsReq(apiKey, sheetId, method, range, body) {
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values`;
-  const url = method === "GET"
+  const url = method==="GET"
     ? `${base}/${encodeURIComponent(range)}?key=${apiKey}`
     : `${base}/${encodeURIComponent(range)}?valueInputOption=RAW&key=${apiKey}`;
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
-  }
+  const res = await fetch(url,{method,headers:{"Content-Type":"application/json"},...(body?{body:JSON.stringify(body)}:{})});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e?.error?.message||`HTTP ${res.status}`);}
   return res.json();
 }
 
+const HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
+
 async function initSheet(apiKey, sheetId) {
-  // Write headers + all acts on first use
-  const rows = [SHEET_HEADERS];
-  for (const act of ACTS) {
-    rows.push([act.id, act.name, act.act, act.song, ...VOTERS.map(() => 0), 0]);
-  }
-  await sheetsRequest(apiKey, sheetId, "PUT", "Sheet1!A1:M26", { values: rows });
+  const rows = [HEADERS];
+  for(const a of ACTS) rows.push([a.id,a.name,a.act,a.song,...VOTERS.map(()=>0),0]);
+  await sheetsReq(apiKey,sheetId,"PUT","Sheet1!A1:M26",{values:rows});
 }
 
-async function loadFromSheet(apiKey, sheetId) {
-  const data = await sheetsRequest(apiKey, sheetId, "GET", "Sheet1!A1:M26");
-  const rows = data.values || [];
-  if (rows.length < 2) return null;
-  // rows[0] = headers, rows[1..] = acts
-  const ratings = {};
-  for (let vi = 0; vi < VOTERS.length; vi++) ratings[vi] = {};
-  for (let r = 1; r < rows.length; r++) {
-    const row = rows[r];
-    const actId = parseInt(row[0]);
-    if (!actId) continue;
-    for (let vi = 0; vi < VOTERS.length; vi++) {
-      const val = parseInt(row[4 + vi]) || 0;
-      if (val > 0) ratings[vi][actId] = val;
+async function loadSheet(apiKey, sheetId) {
+  const d = await sheetsReq(apiKey,sheetId,"GET","Sheet1!A1:M26");
+  const rows = d.values||[];
+  if(rows.length<2) return null;
+  const r = {};
+  for(let vi=0;vi<VOTERS.length;vi++) r[vi]={};
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    const aid=parseInt(row[0]);
+    if(!aid) continue;
+    for(let vi=0;vi<VOTERS.length;vi++){
+      const v=parseInt(row[4+vi])||0;
+      if(v>0) r[vi][aid]=v;
     }
   }
-  return ratings;
+  return r;
 }
 
-async function saveToSheet(apiKey, sheetId, ratings, computeScore) {
-  // Build data rows (skip header row 1, start at row 2)
-  const updates = ACTS.map((act, i) => {
-    const voterCols = VOTERS.map((_, vi) => ratings[vi]?.[act.id] ?? 0);
-    const total = computeScore(act.id, ratings);
-    return [act.id, act.name, act.act, act.song, ...voterCols, total];
+async function saveSheet() {
+  if(!state.sheetConfig) return;
+  const updates = ACTS.map(a => {
+    const vc = VOTERS.map((_,vi)=>state.ratings[vi]?.[a.id]||0);
+    return [a.id,a.name,a.act,a.song,...vc,score(a.id)];
   });
-  await sheetsRequest(apiKey, sheetId, "PUT", "Sheet1!A2:M26", { values: updates });
+  await sheetsReq(state.sheetConfig.apiKey,state.sheetConfig.sheetId,"PUT","Sheet1!A2:M26",{values:updates});
 }
 
-/* ─── STAR RATING ────────────────────────────────────── */
-function Stars({ actId, voterId, ratings, onRate, color }) {
-  const cur = ratings[voterId]?.[actId] ?? 0;
-  return (
-    <div style={{ display: "flex", gap: 1 }}>
-      {[1,2,3,4,5].map(s => (
-        <button key={s} onClick={() => onRate(voterId, actId, s === cur ? 0 : s)} style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: 15, padding: "1px", lineHeight: 1,
-          opacity: s <= cur ? 1 : 0.2,
-          filter: s <= cur ? `drop-shadow(0 0 4px ${color})` : "none",
-          transform: s <= cur ? "scale(1.05)" : "scale(1)",
-          transition: "all 0.12s",
-        }}>★</button>
-      ))}
-    </div>
-  );
-}
-
-/* ─── ACT CARD ───────────────────────────────────────── */
-function ActCard({ act, ratings, onRate, activeVoter, score, rank, total }) {
-  const pct = total > 1 ? ((total - rank) / (total - 1)) * 100 : 0;
-  const hasAnyRating = VOTERS.some((_, vi) => (ratings[vi]?.[act.id] ?? 0) > 0);
-  return (
-    <div style={{
-      background: "rgba(255,255,255,0.025)",
-      border: "1px solid rgba(255,255,255,0.07)",
-      borderRadius: 14,
-      padding: "14px 16px 16px",
-      position: "relative",
-      overflow: "hidden",
-      transition: "border-color 0.3s",
-      ...(rank < 3 && hasAnyRating ? { borderColor: ["rgba(255,215,0,0.35)","rgba(192,192,192,0.25)","rgba(205,127,50,0.25)"][rank] } : {}),
-    }}>
-      {/* Score bar */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, height: 2,
-        width: `${pct}%`,
-        background: `linear-gradient(90deg, ${VOTER_COLORS[activeVoter]}, #FFD93D)`,
-        transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
-        borderRadius: "0 1px 0 0",
-      }} />
-
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
-        <span style={{ fontSize: 32, lineHeight: 1, flexShrink: 0 }}>{act.country}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: 17, color: "#fff", letterSpacing: 0.5 }}>
-            {act.name}
-          </div>
-          <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.45)", marginTop: 1 }}>
-            {act.act} · <em>"{act.song}"</em>
-          </div>
-        </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          {score > 0 && <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 26, color: "#FFD93D", lineHeight: 1 }}>{score}</div>}
-          {score > 0 && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: 1 }}>PTS</div>}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
-        {VOTERS.map((voter, vi) => (
-          <div key={vi} style={{
-            background: vi === activeVoter ? `${VOTER_COLORS[vi]}18` : "rgba(0,0,0,0.2)",
-            border: `1px solid ${vi === activeVoter ? VOTER_COLORS[vi] + "55" : "rgba(255,255,255,0.05)"}`,
-            borderRadius: 8, padding: "5px 8px",
-            transition: "all 0.2s",
-          }}>
-            <div style={{ fontSize: 10, color: VOTER_COLORS[vi], fontWeight: 700, marginBottom: 3, letterSpacing: 0.3 }}>
-              {VOTER_EMOJIS[vi]} {voter}
-            </div>
-            <Stars actId={act.id} voterId={vi} ratings={ratings} onRate={onRate} color={VOTER_COLORS[vi]} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── SHEET SETUP MODAL ──────────────────────────────── */
-function SheetModal({ onConnect, onClose }) {
-  const [apiKey, setApiKey] = useState("");
-  const [sheetId, setSheetId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleConnect = async () => {
-    if (!apiKey.trim() || !sheetId.trim()) { setError("Both fields required."); return; }
-    setLoading(true); setError("");
-    try {
-      await onConnect(apiKey.trim(), sheetId.trim());
-    } catch (e) {
-      setError(e.message || "Connection failed. Check your API key and Sheet ID.");
-    } finally { setLoading(false); }
-  };
-
-  return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 100,
-      background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-    }}>
-      <div style={{
-        background: "#12121e", border: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: 18, padding: "28px 28px 24px", maxWidth: 480, width: "100%",
-        boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div>
-            <h2 style={{ margin: 0, fontFamily: "'Barlow Condensed', sans-serif", fontSize: 26, fontWeight: 800, color: "#4D96FF", letterSpacing: 1 }}>
-              📊 Connect Google Sheets
-            </h2>
-            <p style={{ margin: "6px 0 0", color: "rgba(255,255,255,0.45)", fontSize: 13 }}>
-              Sync ratings live across all devices
-            </p>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 20, cursor: "pointer", padding: 4 }}>✕</button>
-        </div>
-
-        <div style={{ background: "rgba(77,150,255,0.08)", border: "1px solid rgba(77,150,255,0.2)", borderRadius: 10, padding: "12px 14px", marginBottom: 18, fontSize: 12, color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>
-          <strong style={{ color: "#4D96FF" }}>Setup steps:</strong><br/>
-          1. Create a new Google Sheet<br/>
-          2. Share it → <em>Anyone with the link can edit</em><br/>
-          3. Enable the <strong>Google Sheets API</strong> in <a href="https://console.cloud.google.com" target="_blank" rel="noopener" style={{ color: "#4D96FF" }}>Google Cloud Console</a><br/>
-          4. Create an <strong>API Key</strong> (no OAuth needed for public sheets)<br/>
-          5. Copy the Sheet ID from its URL: <code style={{ background: "rgba(255,255,255,0.08)", borderRadius: 4, padding: "1px 4px" }}>…/d/<strong style={{ color: "#FFD93D" }}>SHEET_ID</strong>/edit</code>
-        </div>
-
-        {[
-          { label: "Google Sheets API Key", value: apiKey, set: setApiKey, placeholder: "AIzaSy…", type: "password" },
-          { label: "Sheet ID", value: sheetId, set: setSheetId, placeholder: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms", type: "text" },
-        ].map(({ label, value, set, placeholder, type }) => (
-          <div key={label} style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 6, fontWeight: 700, letterSpacing: 0.5 }}>{label}</label>
-            <input
-              type={type} value={value} onChange={e => set(e.target.value)}
-              placeholder={placeholder}
-              style={{
-                width: "100%", background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)", borderRadius: 9,
-                color: "#fff", padding: "10px 13px", fontSize: 13, outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-        ))}
-
-        {error && <div style={{ background: "rgba(255,80,80,0.1)", border: "1px solid rgba(255,80,80,0.3)", borderRadius: 8, padding: "9px 12px", color: "#ff7070", fontSize: 12, marginBottom: 14 }}>{error}</div>}
-
-        <button
-          onClick={handleConnect}
-          disabled={loading}
-          style={{
-            width: "100%", padding: "12px",
-            background: loading ? "rgba(77,150,255,0.3)" : "rgba(77,150,255,0.2)",
-            border: "1px solid rgba(77,150,255,0.5)", borderRadius: 10,
-            color: "#4D96FF", fontWeight: 800, fontSize: 15, cursor: loading ? "not-allowed" : "pointer",
-            fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1,
-            transition: "all 0.2s",
-          }}
-        >
-          {loading ? "Connecting…" : "🔗 Connect & Initialise Sheet"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ─── MAIN APP ───────────────────────────────────────── */
-export default function EurovisionRanker() {
-  const [ratings, setRatings] = useState({});
-  const [activeVoter, setActiveVoter] = useState(0);
-  const [view, setView] = useState("rate");
-  const [search, setSearch] = useState("");
-  const [onlyRated, setOnlyRated] = useState(false);
-  const [showSheetModal, setShowSheetModal] = useState(false);
-  const [sheetConfig, setSheetConfig] = useState(null); // { apiKey, sheetId }
-  const [syncStatus, setSyncStatus] = useState("idle"); // idle | syncing | ok | error
-  const [syncMsg, setSyncMsg] = useState("");
-  const syncTimer = useRef(null);
-
-  const computeScore = useCallback((actId, r = ratings) =>
-    VOTERS.reduce((sum, _, vi) => sum + (r[vi]?.[actId] ?? 0), 0), [ratings]);
-
-  const sortedActs = [...ACTS]
-    .map(a => ({ ...a, score: computeScore(a.id) }))
-    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
-
-  const filteredActs = ACTS.filter(a => {
-    const q = search.toLowerCase();
-    if (q && !a.name.toLowerCase().includes(q) && !a.act.toLowerCase().includes(q) && !a.song.toLowerCase().includes(q)) return false;
-    if (onlyRated && !VOTERS.some((_, vi) => (ratings[vi]?.[a.id] ?? 0) > 0)) return false;
-    return true;
-  }).map(a => ({ ...a, score: computeScore(a.id) }));
-
-  // Debounced sheet sync
-  const scheduleSync = useCallback((newRatings) => {
-    if (!sheetConfig) return;
-    clearTimeout(syncTimer.current);
-    setSyncStatus("pending");
-    syncTimer.current = setTimeout(async () => {
-      setSyncStatus("syncing");
-      try {
-        await saveToSheet(sheetConfig.apiKey, sheetConfig.sheetId, newRatings, (id, r) =>
-          VOTERS.reduce((s, _, vi) => s + (r[vi]?.[id] ?? 0), 0));
-        setSyncStatus("ok");
-        setSyncMsg("Saved " + new Date().toLocaleTimeString());
-      } catch (e) {
-        setSyncStatus("error");
-        setSyncMsg(e.message || "Sync failed");
-      }
-    }, 1500);
-  }, [sheetConfig]);
-
-  const handleRate = useCallback((voterId, actId, stars) => {
-    setRatings(prev => {
-      const next = { ...prev, [voterId]: { ...(prev[voterId] || {}), [actId]: stars } };
-      if (stars === 0) delete next[voterId][actId];
-      scheduleSync(next);
-      return next;
-    });
-  }, [scheduleSync]);
-
-  const handleConnect = async (apiKey, sheetId) => {
-    // Try to read first — if empty, initialise; if has data, load it
-    let loaded = null;
-    try { loaded = await loadFromSheet(apiKey, sheetId); } catch (_) {}
-    if (!loaded) {
-      await initSheet(apiKey, sheetId);
-      loaded = {};
+function scheduleSync() {
+  if(!state.sheetConfig) return;
+  clearTimeout(syncTimer);
+  state.syncStatus="pending"; state.syncMsg="";
+  syncTimer = setTimeout(async()=>{
+    state.syncStatus="syncing"; render();
+    try{
+      await saveSheet();
+      state.syncStatus="ok";
+      state.syncMsg="Saved "+new Date().toLocaleTimeString();
+    }catch(e){
+      state.syncStatus="error";
+      state.syncMsg=e.message||"Sync failed";
     }
-    setSheetConfig({ apiKey, sheetId });
-    if (loaded && Object.keys(loaded).length > 0) setRatings(loaded);
-    setSyncStatus("ok");
-    setSyncMsg("Connected!");
-    setShowSheetModal(false);
-  };
-
-  // Poll for remote changes every 15s if connected
-  useEffect(() => {
-    if (!sheetConfig) return;
-    const interval = setInterval(async () => {
-      if (syncStatus === "syncing" || syncStatus === "pending") return;
-      try {
-        const remote = await loadFromSheet(sheetConfig.apiKey, sheetConfig.sheetId);
-        if (remote) setRatings(remote);
-      } catch (_) {}
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [sheetConfig, syncStatus]);
-
-  const ratedCount = ACTS.filter(a => VOTERS.some((_, vi) => (ratings[vi]?.[a.id] ?? 0) > 0)).length;
-
-  const syncColor = { idle: "rgba(255,255,255,0.25)", pending: "#FFD93D", syncing: "#4D96FF", ok: "#6BCB77", error: "#FF6B9D" }[syncStatus];
-  const syncIcon = { idle: "○", pending: "◌", syncing: "◉", ok: "✓", error: "✕" }[syncStatus];
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#0c0c18", fontFamily: "'Barlow', sans-serif", color: "#fff" }}>
-      {/* Ambient bg */}
-      <div style={{
-        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
-        background: `
-          radial-gradient(ellipse 60% 40% at 15% 15%, rgba(255,107,157,0.07) 0%, transparent 70%),
-          radial-gradient(ellipse 50% 50% at 85% 85%, rgba(77,150,255,0.07) 0%, transparent 70%),
-          radial-gradient(ellipse 40% 30% at 50% 50%, rgba(255,217,61,0.04) 0%, transparent 60%)
-        `,
-      }} />
-
-      <div style={{ position: "relative", zIndex: 1, maxWidth: 880, margin: "0 auto", padding: "0 14px 120px" }}>
-
-        {/* ── HEADER ── */}
-        <div style={{ textAlign: "center", padding: "30px 0 18px" }}>
-          <div style={{ fontSize: 52, marginBottom: -4, filter: "drop-shadow(0 0 20px rgba(255,217,61,0.4))" }}>🎤</div>
-          <h1 style={{
-            fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900,
-            fontSize: "clamp(44px, 9vw, 78px)", letterSpacing: 3, margin: "4px 0 0",
-            background: "linear-gradient(130deg, #FF6B9D 0%, #FFD93D 45%, #4D96FF 100%)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", lineHeight: 0.95,
-          }}>
-            EUROVISION<br/>2026
-          </h1>
-          <div style={{ marginTop: 8, display: "flex", gap: 12, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, letterSpacing: 2, textTransform: "uppercase" }}>
-              Vienna · {ratedCount}/{ACTS.length} rated
-            </span>
-            {/* Sheet sync indicator */}
-            <button
-              onClick={() => setShowSheetModal(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: 5,
-                background: "rgba(255,255,255,0.04)", border: `1px solid ${syncColor}44`,
-                borderRadius: 100, padding: "4px 10px", cursor: "pointer",
-                fontSize: 11, color: syncColor, fontWeight: 700, letterSpacing: 0.5,
-                transition: "all 0.3s",
-              }}
-            >
-              <span style={{ fontSize: 14 }}>{syncIcon}</span>
-              {sheetConfig ? (syncMsg || "Google Sheets") : "Connect Sheets"}
-            </button>
-          </div>
-        </div>
-
-        {/* ── VOTER PILLS ── */}
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", justifyContent: "center", marginBottom: 18 }}>
-          {VOTERS.map((v, i) => {
-            const rated = Object.keys(ratings[i] || {}).length;
-            return (
-              <button key={i} onClick={() => setActiveVoter(i)} style={{
-                padding: "7px 16px", borderRadius: 100,
-                border: `2px solid ${activeVoter === i ? VOTER_COLORS[i] : "rgba(255,255,255,0.08)"}`,
-                background: activeVoter === i ? `${VOTER_COLORS[i]}1a` : "rgba(255,255,255,0.02)",
-                color: activeVoter === i ? VOTER_COLORS[i] : "rgba(255,255,255,0.45)",
-                fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.2s",
-                letterSpacing: 0.3,
-              }}>
-                {VOTER_EMOJIS[i]} {v} {rated > 0 && <span style={{ opacity: 0.6, fontWeight: 400 }}>({rated})</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* ── TABS ── */}
-        <div style={{ display: "flex", gap: 0, marginBottom: 18, background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 4 }}>
-          {[["rate","⭐  Rate Acts"],["leaderboard","🏆  Leaderboard"]].map(([key, label]) => (
-            <button key={key} onClick={() => setView(key)} style={{
-              flex: 1, padding: "10px 0", border: "none", borderRadius: 9,
-              background: view === key ? "rgba(255,255,255,0.09)" : "none",
-              color: view === key ? "#fff" : "rgba(255,255,255,0.35)",
-              fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.2s",
-              fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1,
-            }}>{label}</button>
-          ))}
-        </div>
-
-        {/* ── RATE VIEW ── */}
-        {view === "rate" && (
-          <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              <input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search country, artist, or song…"
-                style={{
-                  flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 10, color: "#fff", padding: "10px 14px", fontSize: 13, outline: "none",
-                }} />
-              <button onClick={() => setOnlyRated(p => !p)} style={{
-                padding: "10px 14px", borderRadius: 10,
-                border: `1px solid ${onlyRated ? "#FFD93D55" : "rgba(255,255,255,0.08)"}`,
-                background: onlyRated ? "rgba(255,217,61,0.1)" : "rgba(255,255,255,0.03)",
-                color: onlyRated ? "#FFD93D" : "rgba(255,255,255,0.4)",
-                fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-              }}>Rated only</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              {filteredActs.length === 0 && (
-                <div style={{ textAlign: "center", padding: 50, color: "rgba(255,255,255,0.25)", fontSize: 15 }}>No acts match 🔍</div>
-              )}
-              {filteredActs.map(act => {
-                const rank = sortedActs.findIndex(a => a.id === act.id);
-                return <ActCard key={act.id} act={act} ratings={ratings} onRate={handleRate}
-                  activeVoter={activeVoter} score={act.score} rank={rank} total={ACTS.length} />;
-              })}
-            </div>
-          </>
-        )}
-
-        {/* ── LEADERBOARD VIEW ── */}
-        {view === "leaderboard" && (
-          <div>
-            {/* Group ranking */}
-            <div style={{ marginBottom: 30 }}>
-              <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, letterSpacing: 3, color: "#FFD93D", margin: "0 0 12px", textTransform: "uppercase" }}>
-                🌍 Group Ranking
-              </h2>
-              {sortedActs.filter(a => a.score > 0).length === 0 && (
-                <div style={{ textAlign: "center", padding: 30, color: "rgba(255,255,255,0.25)" }}>No ratings yet — start scoring acts! ⭐</div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {sortedActs.filter(a => a.score > 0).map((act, i) => {
-                  const medalBg = [
-                    "rgba(255,215,0,0.08)", "rgba(192,192,192,0.06)", "rgba(205,127,50,0.06)"
-                  ][i] || "rgba(255,255,255,0.025)";
-                  const medalBorder = [
-                    "rgba(255,215,0,0.3)", "rgba(192,192,192,0.2)", "rgba(205,127,50,0.2)"
-                  ][i] || "rgba(255,255,255,0.06)";
-                  return (
-                    <div key={act.id} style={{
-                      display: "flex", alignItems: "center", gap: 12,
-                      background: medalBg, border: `1px solid ${medalBorder}`,
-                      borderRadius: 10, padding: "9px 14px",
-                    }}>
-                      <span style={{ fontSize: i < 3 ? 20 : 13, width: 28, textAlign: "center", fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>
-                        {RANK_MEDALS[i]}
-                      </span>
-                      <span style={{ fontSize: 22 }}>{act.country}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{act.name}</div>
-                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{act.act} · <em>"{act.song}"</em></div>
-                      </div>
-                      {/* Per-voter mini stars */}
-                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                        {VOTERS.map((_, vi) => {
-                          const s = ratings[vi]?.[act.id] ?? 0;
-                          return s > 0 ? (
-                            <div key={vi} title={VOTERS[vi]} style={{ fontSize: 10, color: VOTER_COLORS[vi], fontWeight: 700 }}>
-                              {VOTER_EMOJIS[vi]}{s}★
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                      <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 28, fontWeight: 900, color: "#FFD93D", minWidth: 36, textAlign: "right" }}>
-                        {act.score}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Individual Top 5s */}
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 22, fontWeight: 800, letterSpacing: 3, color: "#FF6B9D", margin: "0 0 12px", textTransform: "uppercase" }}>
-              🎯 Individual Top 5s
-            </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-              {VOTERS.map((voter, vi) => {
-                const vr = ratings[vi] || {};
-                const top = ACTS
-                  .filter(a => (vr[a.id] ?? 0) > 0)
-                  .sort((a, b) => (vr[b.id] ?? 0) - (vr[a.id] ?? 0))
-                  .slice(0, 5);
-                return (
-                  <div key={vi} style={{
-                    background: `${VOTER_COLORS[vi]}0c`,
-                    border: `1px solid ${VOTER_COLORS[vi]}2a`,
-                    borderRadius: 12, padding: "12px 14px",
-                  }}>
-                    <div style={{ color: VOTER_COLORS[vi], fontWeight: 800, fontSize: 15, marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
-                      {VOTER_EMOJIS[vi]} {voter.toUpperCase()}
-                    </div>
-                    {top.length === 0 && <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 12 }}>No ratings yet</div>}
-                    {top.map((act, i) => (
-                      <div key={act.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                        <span style={{ fontSize: i < 3 ? 16 : 11, width: 20, textAlign: "center" }}>{RANK_MEDALS[i]}</span>
-                        <span style={{ fontSize: 16 }}>{act.country}</span>
-                        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{act.name}</span>
-                        <span style={{ color: VOTER_COLORS[vi], fontWeight: 700, fontSize: 13 }}>{"★".repeat(vr[act.id])}</span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {showSheetModal && <SheetModal onConnect={handleConnect} onClose={() => setShowSheetModal(false)} />}
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Barlow+Condensed:wght@700;800;900&display=swap');
-        * { box-sizing: border-box; }
-        input::placeholder { color: rgba(255,255,255,0.2); }
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-        button:hover { opacity: 0.85; }
-      `}</style>
-    </div>
-  );
+    render();
+  }, 1500);
 }
+
+setInterval(async()=>{
+  if(!state.sheetConfig||state.syncStatus==="syncing"||state.syncStatus==="pending") return;
+  try{
+    const r = await loadSheet(state.sheetConfig.apiKey,state.sheetConfig.sheetId);
+    if(r){state.ratings=r;render();}
+  }catch(_){}
+}, 15000);
+
+function attachEvents() {
+  document.querySelectorAll('.voter-pill').forEach(b=>b.addEventListener('click',()=>{
+    state.activeVoter=parseInt(b.dataset.vi); render();
+  }));
+  document.getElementById('tabRate')?.addEventListener('click',()=>{state.view='rate';render();});
+  document.getElementById('tabLB')?.addEventListener('click',()=>{state.view='leaderboard';render();});
+  document.getElementById('sheetBtn')?.addEventListener('click',()=>{state.showModal=true;render();});
+  document.getElementById('closeModal')?.addEventListener('click',()=>{state.showModal=false;render();});
+  document.getElementById('modalOverlay')?.addEventListener('click',e=>{if(e.target.id==='modalOverlay'){state.showModal=false;render();}});
+  document.getElementById('onlyRatedBtn')?.addEventListener('click',()=>{state.onlyRated=!state.onlyRated;render();});
+  const si = document.getElementById('searchInput');
+  si?.addEventListener('input',e=>{state.search=e.target.value;render();si.focus();});
+  document.querySelectorAll('.star-btn').forEach(b=>b.addEventListener('click',()=>{
+    const vi=parseInt(b.dataset.vi), aid=parseInt(b.dataset.aid), s=parseInt(b.dataset.s);
+    if(!state.ratings[vi]) state.ratings[vi]={};
+    const cur=state.ratings[vi][aid]||0;
+    if(s===cur) delete state.ratings[vi][aid]; else state.ratings[vi][aid]=s;
+    scheduleSync(); render();
+  }));
+  document.getElementById('connectBtn')?.addEventListener('click',async()=>{
+    const apiKey=document.getElementById('apiKeyInput').value.trim();
+    const sheetId=document.getElementById('sheetIdInput').value.trim();
+    const errEl=document.getElementById('modalError');
+    if(!apiKey||!sheetId){errEl.textContent="Both fields are required.";errEl.style.display='block';return;}
+    const btn=document.getElementById('connectBtn');
+    btn.textContent="Connecting…"; btn.disabled=true; errEl.style.display='none';
+    try{
+      let loaded=null;
+      try{loaded=await loadSheet(apiKey,sheetId);}catch(_){}
+      if(!loaded){await initSheet(apiKey,sheetId);loaded={};}
+      state.sheetConfig={apiKey,sheetId};
+      if(loaded&&Object.keys(loaded).some(k=>Object.keys(loaded[k]).length>0)) state.ratings=loaded;
+      state.syncStatus="ok"; state.syncMsg="Connected!"; state.showModal=false;
+      render();
+    }catch(e){
+      errEl.textContent=e.message||"Connection failed. Check your API key and Sheet ID.";
+      errEl.style.display='block';
+      btn.textContent="🔗 Connect & Initialise Sheet"; btn.disabled=false;
+    }
+  });
+}
+
+render();
+</script>
+</body>
+</html>
