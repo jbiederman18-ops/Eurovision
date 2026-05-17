@@ -65,7 +65,7 @@ const HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
 
 // When served by Apps Script, window.location.href IS the web app URL.
 // Strip query params to get the clean exec endpoint.
-const SCRIPT_URL = https://script.google.com/macros/s/AKfycbwGpo5dFendi6Daa1PjmFQHoi9ekV6J37s7GZ4Hs6QX79_xOiAGvXwmaQoWabbL9PLYSQ/exec
+const SCRIPT_URL = https://script.google.com/macros/s/AKfycbyTPLqowkfrdYfJ61w82ieJgJWy8GH8rvDQrS8LQupXQVgQYXGxzYp0UO4WmkEHrpxZ9w/exec
 
 let state = {
   ratings: {},
@@ -79,86 +79,123 @@ let state = {
 let syncTimer = null;
 let toastTimer = null;
 
+<script>
 // ── SHEET I/O ─────────────────────────────────────────────
+
+// If hosted INSIDE Apps Script, keep this:
+const SCRIPT_URL = window.location.href.split('?')[0];
+
+// If hosted elsewhere, replace with your actual Apps Script URL:
+// const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyTPLqowkfrdYfJ61w82ieJgJWy8GH8rvDQrS8LQupXQVgQYXGxzYp0UO4WmkEHrpxZ9w/exec";
 
 function score(actId, r) {
   r = r || state.ratings;
-  return VOTERS.reduce((s,_,vi) => s + (r[vi]?.[actId]||0), 0);
+  return VOTERS.reduce((s, _, vi) => s + (r[vi]?.[actId] || 0), 0);
 }
 
 async function loadSheet() {
-  const res = await fetch(SCRIPT_URL + '?action=read');
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-  const d = await res.json();
-  const rows = d.values||[];
-  if(rows.length < 2) return null;
-  const r = {};
-  for(let vi=0;vi<VOTERS.length;vi++) r[vi]={};
-  for(let i=1;i<rows.length;i++){
-    const row = rows[i];
-    const aid = parseInt(row[0]);
-    if(!aid) continue;
-    for(let vi=0;vi<VOTERS.length;vi++){
-      const v = parseInt(row[4+vi])||0;
-      if(v>0) r[vi][aid]=v;
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=read`, {
+      method: "GET",
+      redirect: "follow",
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
     }
+
+    const text = await res.text();
+
+    let d;
+    try {
+      d = JSON.parse(text);
+    } catch (err) {
+      console.error("Non-JSON response:", text);
+      throw new Error("Server did not return JSON");
+    }
+
+    const rows = d.values || [];
+
+    if (rows.length < 2) return null;
+
+    const r = {};
+
+    for (let vi = 0; vi < VOTERS.length; vi++) {
+      r[vi] = {};
+    }
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const aid = parseInt(row[0]);
+
+      if (!aid) continue;
+
+      for (let vi = 0; vi < VOTERS.length; vi++) {
+        const v = parseInt(row[4 + vi]) || 0;
+
+        if (v > 0) {
+          r[vi][aid] = v;
+        }
+      }
+    }
+
+    return r;
+
+  } catch (e) {
+    console.error("LOAD ERROR:", e);
+    throw e;
   }
-  return r;
 }
 
 async function saveSheet() {
   const rows = [HEADERS];
-  for(const a of ACTS){
-    const vc = VOTERS.map((_,vi)=>state.ratings[vi]?.[a.id]||0);
-    rows.push([a.id,a.name,a.act,a.song,...vc,score(a.id)]);
-  }
-  const res = await fetch(SCRIPT_URL, {
-    method: "POST",
-    body: JSON.stringify({action:"save", values:rows}),
-  });
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-}
 
-function scheduleSync() {
-  clearTimeout(syncTimer);
-  state.syncStatus = "pending";
-  syncTimer = setTimeout(async () => {
-    state.syncStatus = "syncing"; render();
-    try {
-      await saveSheet();
-      state.syncStatus = "ok";
-      state.syncMsg = "Saved " + new Date().toLocaleTimeString();
-      showToast("✓ Saved to Sheets", "#6BCB77");
-    } catch(e) {
-      state.syncStatus = "error";
-      state.syncMsg = e.message || "Sync failed";
-      showToast("✕ " + state.syncMsg, "#FF6B9D");
+  for (const a of ACTS) {
+    const vc = VOTERS.map(
+      (_, vi) => state.ratings[vi]?.[a.id] || 0
+    );
+
+    rows.push([
+      a.id,
+      a.name,
+      a.act,
+      a.song,
+      ...vc,
+      score(a.id),
+    ]);
+  }
+
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: "POST",
+      redirect: "follow",
+
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+
+      body: JSON.stringify({
+        action: "save",
+        values: rows,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
     }
-    render();
-  }, 1200);
-}
 
-// Poll for remote changes every 15s
-setInterval(async () => {
-  if(state.syncStatus==="syncing" || state.syncStatus==="pending") return;
-  try {
-    const r = await loadSheet();
-    if(r){ state.ratings=r; render(); }
-  } catch(_) {}
-}, 15000);
+    const text = await res.text();
 
-// Load on startup
-(async () => {
-  try {
-    const r = await loadSheet();
-    if(r){ state.ratings=r; render(); }
-    state.syncStatus="ok"; state.syncMsg="Connected";
-    showToast("✓ Connected to Sheets", "#6BCB77");
-    render();
-  } catch(e) {
-    showToast("Could not reach Sheets — working offline", "#FF9F45");
+    console.log("SAVE RESPONSE:", text);
+
+    return true;
+
+  } catch (e) {
+    console.error("SAVE ERROR:", e);
+    throw e;
   }
-})();
+}
+</script>
 
 // ── TOAST ──────────────────────────────────────────────────
 
