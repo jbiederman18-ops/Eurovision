@@ -20,6 +20,12 @@ h1{
   text-align:center;
 }
 
+.status{
+  text-align:center;
+  margin-bottom:20px;
+  opacity:0.7;
+}
+
 .card{
   background:#1f2937;
   border-radius:12px;
@@ -42,6 +48,7 @@ h1{
   background:none;
   border:none;
   cursor:pointer;
+  color:white;
 }
 
 .score{
@@ -50,12 +57,25 @@ h1{
   font-weight:bold;
 }
 
+.error{
+  background:#7f1d1d;
+  padding:12px;
+  border-radius:8px;
+  margin-bottom:20px;
+}
+
 </style>
 </head>
 
 <body>
 
 <h1>🎤 Eurovision 2026</h1>
+
+<div class="status" id="status">
+Loading...
+</div>
+
+<div id="error"></div>
 
 <div id="app"></div>
 
@@ -118,25 +138,67 @@ let currentVoter = "Josh";
 
 let ratings = {};
 
+function setStatus(text){
+  document.getElementById("status")
+    .innerText = text;
+}
+
+function showError(text){
+
+  document.getElementById("error")
+    .innerHTML = `
+      <div class="error">
+        ${text}
+      </div>
+    `;
+}
+
 async function loadRatings(){
 
-  const res = await fetch(API_URL);
+  try {
 
-  const data = await res.json();
+    setStatus("Connecting to Google Sheets...");
 
-  ratings = {};
+    const res =
+      await fetch(API_URL);
 
-  data.forEach(row => {
+    const text =
+      await res.text();
 
-    if(!ratings[row.voter]){
-      ratings[row.voter] = {};
-    }
+    console.log(text);
 
-    ratings[row.voter][row.actId] =
-      row.score;
-  });
+    const data =
+      JSON.parse(text);
 
-  render();
+    ratings = {};
+
+    data.forEach(row => {
+
+      if(!ratings[row.voter]){
+        ratings[row.voter] = {};
+      }
+
+      ratings[row.voter][row.actId] =
+        row.score;
+    });
+
+    render();
+
+    setStatus("Connected");
+
+  } catch(err){
+
+    console.error(err);
+
+    setStatus("Offline");
+
+    showError(
+      "Could not connect to Google Sheets.<br><br>" +
+      err
+    );
+
+    render();
+  }
 }
 
 async function saveRating(
@@ -145,20 +207,31 @@ async function saveRating(
   score
 ){
 
-  await fetch(API_URL, {
+  try {
 
-    method:"POST",
+    await fetch(API_URL, {
 
-    headers:{
-      "Content-Type":"text/plain"
-    },
+      method:"POST",
 
-    body:JSON.stringify({
-      actId,
-      voter,
-      score
-    })
-  });
+      headers:{
+        "Content-Type":"text/plain"
+      },
+
+      body:JSON.stringify({
+        actId,
+        voter,
+        score
+      })
+    });
+
+    setStatus("Saved");
+
+  } catch(err){
+
+    console.error(err);
+
+    setStatus("Save failed");
+  }
 }
 
 function totalScore(actId){
@@ -199,7 +272,9 @@ function render(){
       </div>
 
       <div class="stars">
+
         ${[1,2,3,4,5].map(star => `
+
           <button
             onclick="
               rate(
@@ -214,11 +289,14 @@ function render(){
               : "☆"
             }
           </button>
+
         `).join("")}
+
       </div>
 
       <div class="score">
-        Total: ${totalScore(act.id)}
+        Total Score:
+        ${totalScore(act.id)}
       </div>
     `;
 
@@ -246,6 +324,8 @@ async function rate(
     score
   );
 }
+
+render();
 
 loadRatings();
 
