@@ -1,371 +1,255 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eurovision 2026 Party Ranker</title>
+
+<title>Eurovision Ranker</title>
+
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;700&family=Barlow+Condensed:wght@700;800;900&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#0c0c18;color:#fff;font-family:'Barlow',sans-serif;min-height:100vh}
-  button{cursor:pointer;font-family:'Barlow',sans-serif}
-  input{font-family:'Barlow',sans-serif}
-  input::placeholder{color:rgba(255,255,255,0.2)}
-  ::-webkit-scrollbar{width:4px}
-  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
-  .pill{border-radius:100px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.45);padding:6px 14px;font-weight:700;font-size:12px;transition:all 0.2s}
-  .tab{flex:1;padding:9px 0;border:none;border-radius:9px;background:none;color:rgba(255,255,255,0.35);font-weight:700;font-size:13px;transition:all 0.2s;letter-spacing:.5px}
-  .tab.active{background:rgba(255,255,255,0.09);color:#fff}
-  .act-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:13px 14px 14px;position:relative;overflow:hidden;margin-bottom:8px}
-  .score-bar{position:absolute;bottom:0;left:0;height:2px;background:linear-gradient(90deg,#FF6B9D,#FFD93D);transition:width 0.5s cubic-bezier(.4,0,.2,1);border-radius:0 1px 0 0}
-  .voter-cell{border-radius:8px;padding:4px 7px;transition:all 0.2s;border:1px solid rgba(255,255,255,0.05)}
-  .star-btn{background:none;border:none;font-size:14px;padding:1px;line-height:1;cursor:pointer;transition:all 0.1s}
-  .lb-row{display:flex;align-items:center;gap:10px;border-radius:10px;padding:8px 12px;margin-bottom:4px}
-  .section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px}
-  .toast{position:fixed;bottom:24px;right:24px;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:700;letter-spacing:.5px;z-index:999;transition:opacity 0.4s;pointer-events:none}
+
+body{
+  font-family:Arial;
+  background:#111827;
+  color:white;
+  margin:0;
+  padding:20px;
+}
+
+h1{
+  text-align:center;
+}
+
+.card{
+  background:#1f2937;
+  border-radius:12px;
+  padding:16px;
+  margin-bottom:12px;
+}
+
+.country{
+  font-size:22px;
+  font-weight:bold;
+}
+
+.song{
+  opacity:0.7;
+  margin-bottom:10px;
+}
+
+.stars button{
+  font-size:24px;
+  background:none;
+  border:none;
+  cursor:pointer;
+}
+
+.score{
+  margin-top:10px;
+  color:#facc15;
+  font-weight:bold;
+}
+
 </style>
 </head>
+
 <body>
-<div id="root" style="max-width:860px;margin:0 auto;padding:0 14px 100px"></div>
-<div id="toast" class="toast" style="opacity:0"></div>
+
+<h1>🎤 Eurovision 2026</h1>
+
+<div id="app"></div>
 
 <script>
-const VOTERS = ["Sarah","Maria","Erik","Ryan","Sam","Mads","Connor","Josh"];
-const VCOLORS = ["#FF6B9D","#FFD93D","#6BCB77","#4D96FF","#FF9F45","#C77DFF","#FF5E5E","#00D4C8"];
-const VEMOJI  = ["🌸","✨","🌿","🌊","🔥","💜","⚡","🎯"];
-const ACTS = [
-  {id:1,flag:"🇩🇰",name:"Denmark",act:"Søren Torpegaard Lund",song:"Før Vi Går Hjem"},
-  {id:2,flag:"🇩🇪",name:"Germany",act:"Sarah Engels",song:"Fire"},
-  {id:3,flag:"🇮🇱",name:"Israel",act:"Noam Bettan",song:"Michelle"},
-  {id:4,flag:"🇧🇪",name:"Belgium",act:"ESSYLA",song:"Dancing on the Ice"},
-  {id:5,flag:"🇦🇱",name:"Albania",act:"Alis",song:"Nân"},
-  {id:6,flag:"🇬🇷",name:"Greece",act:"Akylas",song:"Ferto"},
-  {id:7,flag:"🇺🇦",name:"Ukraine",act:"LELÉKA",song:"Ridnym"},
-  {id:8,flag:"🇦🇺",name:"Australia",act:"Delta Goodrem",song:"Eclipse"},
-  {id:9,flag:"🇷🇸",name:"Serbia",act:"LAVINA",song:"Kraj Mene"},
-  {id:10,flag:"🇲🇹",name:"Malta",act:"AIDAN",song:"Bella"},
-  {id:11,flag:"🇨🇿",name:"Czechia",act:"Daniel Zizka",song:"CROSSROADS"},
-  {id:12,flag:"🇧🇬",name:"Bulgaria",act:"DARA",song:"Bangaranga"},
-  {id:13,flag:"🇭🇷",name:"Croatia",act:"LELEK",song:"Andromeda"},
-  {id:14,flag:"🇬🇧",name:"United Kingdom",act:"LOOK MUM NO COMPUTER",song:"Eins, Zwei, Drei"},
-  {id:15,flag:"🇫🇷",name:"France",act:"Monroe",song:"Regarde !"},
-  {id:16,flag:"🇲🇩",name:"Moldova",act:"Satoshi",song:"Viva, Moldova!"},
-  {id:17,flag:"🇫🇮",name:"Finland",act:"Linda Lampenius x Pete Parkkonen",song:"Liekinheitin"},
-  {id:18,flag:"🇵🇱",name:"Poland",act:"ALICJA",song:"Pray"},
-  {id:19,flag:"🇱🇹",name:"Lithuania",act:"Lion Ceccah",song:"Sólo Quiero Más"},
-  {id:20,flag:"🇸🇪",name:"Sweden",act:"FELICIA",song:"My System"},
-  {id:21,flag:"🇨🇾",name:"Cyprus",act:"Antigoni",song:"JALLA"},
-  {id:22,flag:"🇮🇹",name:"Italy",act:"Sal Da Vinci",song:"Per Sempre Sì"},
-  {id:23,flag:"🇳🇴",name:"Norway",act:"JONAS LOVV",song:"YA YA YA"},
-  {id:24,flag:"🇷🇴",name:"Romania",act:"Alexandra Căpitănescu",song:"Choke Me"},
-  {id:25,flag:"🇦🇹",name:"Austria",act:"COSMÓ",song:"Tanzschein"},
+
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbzkw4_5FSR9XOUpOILzv6o5KAJw6_kgIYvv2L0HwyFihcaZMk2Y7udXXKfYanfFR6YD/exec";
+
+const VOTERS = [
+  "Sarah",
+  "Maria",
+  "Erik",
+  "Ryan",
+  "Sam",
+  "Mads",
+  "Connor",
+  "Josh"
 ];
-const MEDALS = ["🥇","🥈","🥉","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25"];
-const HEADERS = ["ActID","Country","Act","Song",...VOTERS,"TotalScore"];
 
-// When served by Apps Script, window.location.href IS the web app URL.
-// Strip query params to get the clean exec endpoint.
-const SCRIPT_URL = https://script.google.com/macros/s/AKfycbyTPLqowkfrdYfJ61w82ieJgJWy8GH8rvDQrS8LQupXQVgQYXGxzYp0UO4WmkEHrpxZ9w/exec
+const ACTS = [
 
-let state = {
-  ratings: {},
-  activeVoter: 0,
-  view: "rate",
-  search: "",
-  onlyRated: false,
-  syncStatus: "idle",
-  syncMsg: "",
-};
-let syncTimer = null;
-let toastTimer = null;
+  {
+    id:1,
+    flag:"🇩🇰",
+    country:"Denmark",
+    song:"Før Vi Går Hjem"
+  },
 
-<script>
-// ── SHEET I/O ─────────────────────────────────────────────
+  {
+    id:2,
+    flag:"🇩🇪",
+    country:"Germany",
+    song:"Fire"
+  },
 
-// If hosted INSIDE Apps Script, keep this:
-const SCRIPT_URL = window.location.href.split('?')[0];
+  {
+    id:3,
+    flag:"🇮🇱",
+    country:"Israel",
+    song:"Michelle"
+  },
 
-// If hosted elsewhere, replace with your actual Apps Script URL:
-// const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyTPLqowkfrdYfJ61w82ieJgJWy8GH8rvDQrS8LQupXQVgQYXGxzYp0UO4WmkEHrpxZ9w/exec";
+  {
+    id:4,
+    flag:"🇧🇪",
+    country:"Belgium",
+    song:"Dancing on the Ice"
+  },
 
-function score(actId, r) {
-  r = r || state.ratings;
-  return VOTERS.reduce((s, _, vi) => s + (r[vi]?.[actId] || 0), 0);
-}
-
-async function loadSheet() {
-  try {
-    const res = await fetch(`${SCRIPT_URL}?action=read`, {
-      method: "GET",
-      redirect: "follow",
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const text = await res.text();
-
-    let d;
-    try {
-      d = JSON.parse(text);
-    } catch (err) {
-      console.error("Non-JSON response:", text);
-      throw new Error("Server did not return JSON");
-    }
-
-    const rows = d.values || [];
-
-    if (rows.length < 2) return null;
-
-    const r = {};
-
-    for (let vi = 0; vi < VOTERS.length; vi++) {
-      r[vi] = {};
-    }
-
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      const aid = parseInt(row[0]);
-
-      if (!aid) continue;
-
-      for (let vi = 0; vi < VOTERS.length; vi++) {
-        const v = parseInt(row[4 + vi]) || 0;
-
-        if (v > 0) {
-          r[vi][aid] = v;
-        }
-      }
-    }
-
-    return r;
-
-  } catch (e) {
-    console.error("LOAD ERROR:", e);
-    throw e;
-  }
-}
-
-async function saveSheet() {
-  const rows = [HEADERS];
-
-  for (const a of ACTS) {
-    const vc = VOTERS.map(
-      (_, vi) => state.ratings[vi]?.[a.id] || 0
-    );
-
-    rows.push([
-      a.id,
-      a.name,
-      a.act,
-      a.song,
-      ...vc,
-      score(a.id),
-    ]);
+  {
+    id:5,
+    flag:"🇦🇱",
+    country:"Albania",
+    song:"Nân"
   }
 
-  try {
-    const res = await fetch(SCRIPT_URL, {
-      method: "POST",
-      redirect: "follow",
+];
 
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
+let currentVoter = "Josh";
 
-      body: JSON.stringify({
-        action: "save",
-        values: rows,
-      }),
-    });
+let ratings = {};
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+async function loadRatings(){
+
+  const res = await fetch(API_URL);
+
+  const data = await res.json();
+
+  ratings = {};
+
+  data.forEach(row => {
+
+    if(!ratings[row.voter]){
+      ratings[row.voter] = {};
     }
 
-    const text = await res.text();
+    ratings[row.voter][row.actId] =
+      row.score;
+  });
 
-    console.log("SAVE RESPONSE:", text);
-
-    return true;
-
-  } catch (e) {
-    console.error("SAVE ERROR:", e);
-    throw e;
-  }
+  render();
 }
+
+async function saveRating(
+  actId,
+  voter,
+  score
+){
+
+  await fetch(API_URL, {
+
+    method:"POST",
+
+    headers:{
+      "Content-Type":"text/plain"
+    },
+
+    body:JSON.stringify({
+      actId,
+      voter,
+      score
+    })
+  });
+}
+
+function totalScore(actId){
+
+  return VOTERS.reduce((sum,voter)=>{
+
+    return sum +
+      (ratings[voter]?.[actId] || 0);
+
+  },0);
+}
+
+function render(){
+
+  const app =
+    document.getElementById("app");
+
+  app.innerHTML = "";
+
+  ACTS.forEach(act => {
+
+    const div =
+      document.createElement("div");
+
+    div.className = "card";
+
+    const myScore =
+      ratings[currentVoter]?.[act.id] || 0;
+
+    div.innerHTML = `
+
+      <div class="country">
+        ${act.flag} ${act.country}
+      </div>
+
+      <div class="song">
+        ${act.song}
+      </div>
+
+      <div class="stars">
+        ${[1,2,3,4,5].map(star => `
+          <button
+            onclick="
+              rate(
+                ${act.id},
+                ${star}
+              )
+            "
+          >
+            ${
+              star <= myScore
+              ? "⭐"
+              : "☆"
+            }
+          </button>
+        `).join("")}
+      </div>
+
+      <div class="score">
+        Total: ${totalScore(act.id)}
+      </div>
+    `;
+
+    app.appendChild(div);
+  });
+}
+
+async function rate(
+  actId,
+  score
+){
+
+  if(!ratings[currentVoter]){
+    ratings[currentVoter] = {};
+  }
+
+  ratings[currentVoter][actId] =
+    score;
+
+  render();
+
+  await saveRating(
+    actId,
+    currentVoter,
+    score
+  );
+}
+
+loadRatings();
+
 </script>
 
-// ── TOAST ──────────────────────────────────────────────────
-
-function showToast(msg, color) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.style.background = color+'22';
-  el.style.border = '1px solid '+color+'55';
-  el.style.color = color;
-  el.style.opacity = '1';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.style.opacity='0'; }, 3000);
-}
-
-// ── RENDER ─────────────────────────────────────────────────
-
-function sortedActs() {
-  return [...ACTS].map(a=>({...a,score:score(a.id)}))
-    .sort((a,b)=>b.score-a.score||a.name.localeCompare(b.name));
-}
-
-function render() {
-  document.getElementById('root').innerHTML = buildApp();
-  attachEvents();
-}
-
-function buildApp() {
-  const rated = ACTS.filter(a=>VOTERS.some((_,vi)=>(state.ratings[vi]?.[a.id]||0)>0)).length;
-  const scol = {idle:"rgba(255,255,255,0.3)",pending:"#FFD93D",syncing:"#4D96FF",ok:"#6BCB77",error:"#FF6B9D"}[state.syncStatus];
-  const sico = {idle:"○",pending:"◌",syncing:"◉",ok:"✓",error:"✕"}[state.syncStatus];
-
-  return `
-  <div style="text-align:center;padding:28px 0 16px">
-    <div style="font-size:48px;margin-bottom:-2px">🎤</div>
-    <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(42px,9vw,74px);letter-spacing:3px;background:linear-gradient(130deg,#FF6B9D 0%,#FFD93D 45%,#4D96FF 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:.95;margin:4px 0 0">EUROVISION<br>2026</h1>
-    <div style="margin-top:8px;display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap">
-      <span style="color:rgba(255,255,255,0.35);font-size:11px;letter-spacing:2px;text-transform:uppercase">Vienna · ${rated}/${ACTS.length} rated</span>
-      <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.04);border:1px solid ${scol}44;border-radius:100px;padding:4px 10px;font-size:11px;color:${scol};font-weight:700;letter-spacing:.5px">
-        ${sico} ${state.syncMsg||"Sheets"}
-      </span>
-    </div>
-  </div>
-
-  <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:16px">
-    ${VOTERS.map((v,i) => {
-      const rc = Object.keys(state.ratings[i]||{}).length;
-      const active = i===state.activeVoter;
-      return `<button class="pill voter-pill" data-vi="${i}" style="${active?`border-color:${VCOLORS[i]};background:${VCOLORS[i]}22;color:${VCOLORS[i]}`:''}">${VEMOJI[i]} ${v}${rc>0?` <span style="opacity:.55;font-weight:400">(${rc})</span>`:''}</button>`;
-    }).join('')}
-  </div>
-
-  <div style="display:flex;gap:0;margin-bottom:16px;background:rgba(255,255,255,0.03);border-radius:12px;padding:4px">
-    <button class="tab${state.view==='rate'?' active':''}" id="tabRate">⭐  Rate Acts</button>
-    <button class="tab${state.view==='leaderboard'?' active':''}" id="tabLB">🏆  Leaderboard</button>
-  </div>
-
-  ${state.view==='rate' ? buildRateView() : buildLeaderboard()}
-  `;
-}
-
-function buildRateView() {
-  const sa = sortedActs();
-  const q = state.search.toLowerCase();
-  const acts = ACTS.filter(a => {
-    if(q && !a.name.toLowerCase().includes(q) && !a.act.toLowerCase().includes(q) && !a.song.toLowerCase().includes(q)) return false;
-    if(state.onlyRated && !VOTERS.some((_,vi)=>(state.ratings[vi]?.[a.id]||0)>0)) return false;
-    return true;
-  }).map(a=>({...a,score:score(a.id)}));
-
-  return `
-  <div style="display:flex;gap:8px;margin-bottom:12px">
-    <input id="searchInput" value="${state.search.replace(/"/g,'&quot;')}" placeholder="Search country, artist, or song…"
-      style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:#fff;padding:9px 13px;font-size:13px;outline:none">
-    <button id="onlyRatedBtn" style="padding:9px 13px;border-radius:10px;border:1px solid ${state.onlyRated?'#FFD93D55':'rgba(255,255,255,0.08)'};background:${state.onlyRated?'rgba(255,217,61,0.1)':'rgba(255,255,255,0.03)'};color:${state.onlyRated?'#FFD93D':'rgba(255,255,255,0.4)'};font-size:12px;font-weight:700;white-space:nowrap">Rated only</button>
-  </div>
-  ${acts.length===0?'<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.25);font-size:14px">No acts match 🔍</div>':''}
-  ${acts.map(a => {
-    const rank = sa.findIndex(x=>x.id===a.id);
-    const pct = ACTS.length>1?((ACTS.length-rank)/(ACTS.length-1))*100:0;
-    const topBorder = rank<3&&a.score>0?["rgba(255,215,0,0.35)","rgba(192,192,192,0.25)","rgba(205,127,50,0.25)"][rank]:"rgba(255,255,255,0.07)";
-    return `
-    <div class="act-card" style="border-color:${topBorder}">
-      <div class="score-bar" style="width:${pct}%"></div>
-      <div style="display:flex;gap:11px;align-items:flex-start;margin-bottom:9px">
-        <span style="font-size:30px;line-height:1;flex-shrink:0">${a.flag}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:#fff;letter-spacing:.3px">${a.name}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px">${a.act} · <em>"${a.song}"</em></div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          ${a.score>0?`<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:24px;color:#FFD93D;line-height:1">${a.score}</div><div style="font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:1px">PTS</div>`:''}
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
-        ${VOTERS.map((v,vi) => {
-          const cur = state.ratings[vi]?.[a.id]||0;
-          const active = vi===state.activeVoter;
-          const stars = [1,2,3,4,5].map(s=>`<button class="star-btn" data-vi="${vi}" data-aid="${a.id}" data-s="${s}" style="opacity:${s<=cur?1:0.18};color:${s<=cur?VCOLORS[vi]:'#fff'};transform:${s<=cur?'scale(1.08)':'scale(1)'}">★</button>`).join('');
-          return `<div class="voter-cell" style="${active?`background:${VCOLORS[vi]}18;border-color:${VCOLORS[vi]}55`:''}">
-            <div style="font-size:9px;color:${VCOLORS[vi]};font-weight:700;margin-bottom:2px;letter-spacing:.2px">${VEMOJI[vi]} ${v}</div>
-            <div style="display:flex;gap:0">${stars}</div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  }).join('')}`;
-}
-
-function buildLeaderboard() {
-  const sa = sortedActs().filter(a=>a.score>0);
-  const medalBgs = ["rgba(255,215,0,0.08)","rgba(192,192,192,0.06)","rgba(205,127,50,0.06)"];
-  const medalBorders = ["rgba(255,215,0,0.3)","rgba(192,192,192,0.2)","rgba(205,127,50,0.2)"];
-
-  return `
-  <div style="margin-bottom:26px">
-    <div class="section-title" style="color:#FFD93D">🌍 Group Ranking</div>
-    ${sa.length===0?'<div style="text-align:center;padding:28px;color:rgba(255,255,255,0.25)">No ratings yet — start scoring! ⭐</div>':''}
-    ${sa.map((a,i) => `
-    <div class="lb-row" style="background:${medalBgs[i]||'rgba(255,255,255,0.025)'};border:1px solid ${medalBorders[i]||'rgba(255,255,255,0.06)'}">
-      <span style="font-size:${i<3?19:12}px;width:26px;text-align:center;font-weight:700;color:rgba(255,255,255,0.55)">${MEDALS[i]}</span>
-      <span style="font-size:21px">${a.flag}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px">${a.name}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.35)">${a.act} · <em>"${a.song}"</em></div>
-      </div>
-      <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:160px">
-        ${VOTERS.map((_,vi)=>{const s=state.ratings[vi]?.[a.id]||0;return s>0?`<span style="font-size:9px;color:${VCOLORS[vi]};font-weight:700">${VEMOJI[vi]}${s}★</span>`:''}).join('')}
-      </div>
-      <span style="font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;color:#FFD93D;min-width:32px;text-align:right">${a.score}</span>
-    </div>`).join('')}
-  </div>
-
-  <div class="section-title" style="color:#FF6B9D">🎯 Individual Top 5s</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:9px">
-    ${VOTERS.map((v,vi) => {
-      const vr = state.ratings[vi]||{};
-      const top = ACTS.filter(a=>(vr[a.id]||0)>0).sort((a,b)=>(vr[b.id]||0)-(vr[a.id]||0)).slice(0,5);
-      return `<div style="background:${VCOLORS[vi]}0d;border:1px solid ${VCOLORS[vi]}2a;border-radius:11px;padding:11px 13px">
-        <div style="color:${VCOLORS[vi]};font-weight:800;font-size:14px;margin-bottom:8px;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px">${VEMOJI[vi]} ${v.toUpperCase()}</div>
-        ${top.length===0?'<div style="color:rgba(255,255,255,0.2);font-size:11px">No ratings yet</div>':''}
-        ${top.map((a,i)=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
-          <span style="font-size:${i<3?15:10}px;width:18px;text-align:center">${MEDALS[i]}</span>
-          <span style="font-size:15px">${a.flag}</span>
-          <span style="font-size:11px;color:rgba(255,255,255,0.65);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</span>
-          <span style="color:${VCOLORS[vi]};font-size:12px">${'★'.repeat(vr[a.id])}</span>
-        </div>`).join('')}
-      </div>`;
-    }).join('')}
-  </div>`;
-}
-
-function attachEvents() {
-  document.querySelectorAll('.voter-pill').forEach(b=>b.addEventListener('click',()=>{
-    state.activeVoter=parseInt(b.dataset.vi); render();
-  }));
-  document.getElementById('tabRate')?.addEventListener('click',()=>{state.view='rate';render();});
-  document.getElementById('tabLB')?.addEventListener('click',()=>{state.view='leaderboard';render();});
-  document.getElementById('onlyRatedBtn')?.addEventListener('click',()=>{state.onlyRated=!state.onlyRated;render();});
-  const si = document.getElementById('searchInput');
-  si?.addEventListener('input',e=>{state.search=e.target.value;render();si.focus();});
-  document.querySelectorAll('.star-btn').forEach(b=>b.addEventListener('click',()=>{
-    const vi=parseInt(b.dataset.vi), aid=parseInt(b.dataset.aid), s=parseInt(b.dataset.s);
-    if(!state.ratings[vi]) state.ratings[vi]={};
-    const cur=state.ratings[vi][aid]||0;
-    if(s===cur) delete state.ratings[vi][aid]; else state.ratings[vi][aid]=s;
-    scheduleSync(); render();
-  }));
-}
-
-render();
-</script>
 </body>
 </html>
